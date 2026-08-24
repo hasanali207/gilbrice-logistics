@@ -1,0 +1,197 @@
+/* Tailwind base */
+/* Third-party CSS */
+@import "keen-slider/keen-slider.min.css";
+@import "react-datepicker/dist/react-datepicker.css";
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@font-face {
+  font-family: "SolaimanLipi";
+  src: url("/fonts/SolaimanLipi.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  --background: #f7f8f9;
+  --foreground: #2c1a1a;
+
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+
+  --primary: #073520;
+  --primary-foreground: #ffffff;
+
+  --secondary: #1a6b3c;
+  --secondary-foreground: #ffffff;
+
+  --accent: #f5a623;
+  --accent-foreground: #412402;
+
+  --muted: #e5e7eb;
+  --muted-foreground: #6b7280;
+
+  --destructive: #dc2626;
+
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #0a4a2a;
+
+  /* Charts */
+  --chart-1: #073520;
+  --chart-2: #1a6b3c;
+  --chart-3: #f5a623;
+  --chart-4: #0a4a2a;
+  --chart-5: #6b7280;
+
+  /* Sidebar */
+  --sidebar: #073520;
+  --sidebar-foreground: #ffffff;
+
+  --sidebar-primary: #f5a623;
+  --sidebar-primary-foreground: #412402;
+
+  --sidebar-accent: #0d5c34;
+  --sidebar-accent-foreground: #ffffff;
+
+  --sidebar-border: #0d5c34;
+  --sidebar-ring: #f5a623;
+}
+
+.dark {
+  --background: #0a0f0c;
+  --foreground: #f0f4f2;
+
+  --card: #111a15;
+  --card-foreground: #f0f4f2;
+
+  --popover: #111a15;
+  --popover-foreground: #f0f4f2;
+
+  --primary: #1a6b3c;
+  --primary-foreground: #ffffff;
+
+  --secondary: #0d5c34;
+  --secondary-foreground: #ffffff;
+
+  --accent: #f5a623;
+  --accent-foreground: #1a1a1a;
+
+  --muted: #1c2b23;
+  --muted-foreground: #9ca3af;
+
+  --destructive: #ef4444;
+
+  --border: #1e3028;
+  --input: #1e3028;
+  --ring: #1a6b3c;
+
+  /* Charts */
+  --chart-1: #1a6b3c;
+  --chart-2: #f5a623;
+  --chart-3: #34d399;
+  --chart-4: #f59e0b;
+  --chart-5: #9ca3af;
+
+  /* Sidebar */
+  --sidebar: #060e09;
+  --sidebar-foreground: #e5e7eb;
+
+  --sidebar-primary: #f5a623;
+  --sidebar-primary-foreground: #412402;
+
+  --sidebar-accent: #0a4a2a;
+  --sidebar-accent-foreground: #ffffff;
+
+  --sidebar-border: #0a4a2a;
+  --sidebar-ring: #f5a623;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+.bangla {
+  font-family: "SolaimanLipi" !important;
+}
+
+.embla__container {
+  display: flex;
+  flex-direction: column;
+}
+
+.embla__slide {
+  min-height: 80px; /* প্রতিটি স্লাইডের উচ্চতা */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+
+button,
+link,
+a {
+  cursor: pointer;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #768fc1, #9385ad);
+  border-radius: 9999px;
+}
