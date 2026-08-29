@@ -70,7 +70,7 @@ const NavBar = () => {
 
               <div className="flex items-center gap-2">
                 <Phone size={14} />
-                <span>+880 1XXX-XXXXXX</span>
+                <span>+1 (304) 907-7812</span>
               </div>
             </div>
 
@@ -117,6 +117,10 @@ const NavBar = () => {
 
               <Link href="/tracking" className={linkClasses("/tracking")}>
                 Track a Shipment
+              </Link>
+
+              <Link href="/pay" className={linkClasses("/tracking")}>
+                Shipment Payment
               </Link>
 
               {/* SERVICES DROPDOWN */}
@@ -282,7 +286,9 @@ const NavBar = () => {
                   <Link href="/tracking" onClick={() => setIsOpen(false)}>
                     Track a Shipment
                   </Link>
-
+                  <Link href="/pay" className={linkClasses("/tracking")}>
+                    Shipment Payment
+                  </Link>
                   {/* Services */}
                   <div>
                     <button

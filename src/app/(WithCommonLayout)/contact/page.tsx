@@ -1,16 +1,11 @@
-import type { Metadata } from "next";
+import Contactpage from "@/components/ContactPage/Contact";
 
-export const metadata: Metadata = {
-  title: "TutorLink | Contact",
-  description: "TutorLink helps you to find Best tutors",
-};
-
-const ContactPage = () => {
+function page() {
   return (
-    <div className="">
-      <h1 className="text-3xl font-bold text-center mb-4">Contact Us</h1>
+    <div>
+      <Contactpage />
     </div>
   );
-};
+}
 
-export default ContactPage;
+export default page;

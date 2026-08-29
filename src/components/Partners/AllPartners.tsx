@@ -336,42 +336,51 @@ const AllPartners = forwardRef((props, ref) => {
                       <Button
                         size="sm"
                         variant="outline"
+                        title="Edit partner"
                         onClick={() => handleEdit(p)}
                       >
                         <SquarePen size={14} />
                       </Button>
                       <Link href={`${basePath}/partners/${p.id}/rates`}>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Wholesale rates"
+                        >
                           <Ship size={14} />
                         </Button>
                       </Link>
                       <Link href={`${basePath}/partners/${p.id}/ledger`}>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" title="Ledger">
                           <BookOpen size={14} />
                         </Button>
                       </Link>
                       <Link href={`${basePath}/partners/${p.id}/employees`}>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" title="Employees">
                           <Users size={14} />
                         </Button>
                       </Link>
                       <Link href={`${basePath}/partners/${p.id}/shipments`}>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" title="Shipments">
                           <Truck size={14} />
                         </Button>
                       </Link>
                       <Link href={`${basePath}/partners/${p.id}/scanner`}>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" title="Scanner">
                           <Scan size={14} />
                         </Button>
                       </Link>
                       <Link href={`${basePath}/partners/${p.id}/settlement`}>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" title="Settlement">
                           <DollarSign size={14} />
                         </Button>
                       </Link>
                       <Link href={`${basePath}/partners/${p.id}/ledger`}>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Credit / Ledger"
+                        >
                           <CreditCard size={14} />
                         </Button>
                       </Link>

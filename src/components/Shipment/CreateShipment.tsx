@@ -130,7 +130,7 @@ const CreateShipment = () => {
 
   const [submitting, setSubmitting] = useState(false);
   const [refreshingCustomers, setRefreshingCustomers] = useState(false);
-
+  const VOLUMETRIC_DIVISOR = 5000; // ইন্ডাস্ট্রি স্ট্যান্ডার্ড, cm³ থেকে kg
   // ============================================================
   // FORM
   // ============================================================
@@ -140,7 +140,9 @@ const CreateShipment = () => {
     origin: "",
     destination: "",
     actualWeightKg: "",
-    volumetricWeightKg: "",
+    lengthCm: "", // 👈 নতুন
+    widthCm: "", // 👈 নতুন
+    heightCm: "", // 👈 নতুন
     retailRatePerKg: "",
     discount: "0",
     additionalFees: "0",
@@ -165,18 +167,22 @@ const CreateShipment = () => {
   const calculation = useMemo(() => {
     const actual = Number(form.actualWeightKg || 0);
 
-    const volumetric = Number(form.volumetricWeightKg || 0);
+    const length = Number(form.lengthCm || 0);
+    const width = Number(form.widthCm || 0);
+    const height = Number(form.heightCm || 0);
+
+    // Volumetric Weight Auto-Calculate
+    const volumetric =
+      length > 0 && width > 0 && height > 0
+        ? (length * width * height) / VOLUMETRIC_DIVISOR
+        : 0;
 
     const retailRate = Number(form.retailRatePerKg || 0);
-
     const discount = Number(form.discount || 0);
-
     const additionalFees = Number(form.additionalFees || 0);
 
     const chargeableWeight = Math.max(actual, volumetric);
-
     const customerPrice = chargeableWeight * retailRate;
-
     const finalAmount = customerPrice - discount + additionalFees;
 
     return {
@@ -389,11 +395,6 @@ const CreateShipment = () => {
       return false;
     }
 
-    if (form.volumetricWeightKg !== "" && calculation.volumetric < 0) {
-      toast.error("Volumetric weight cannot be negative");
-      return false;
-    }
-
     if (form.retailRatePerKg === "" || calculation.retailRate < 0) {
       toast.error("Retail rate cannot be negative");
       return false;
@@ -452,7 +453,7 @@ const CreateShipment = () => {
         actualWeightKg: calculation.actual,
 
         volumetricWeightKg:
-          form.volumetricWeightKg !== "" ? calculation.volumetric : undefined,
+          calculation.volumetric > 0 ? calculation.volumetric : undefined,
 
         retailRatePerKg: calculation.retailRate,
 
@@ -862,7 +863,7 @@ const CreateShipment = () => {
                       <input
                         value={form.origin}
                         onChange={(e) => handleChange("origin", e.target.value)}
-                        placeholder="Dhaka, Bangladesh"
+                        placeholder="Houston, US"
                         className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-secondary focus:ring-4 focus:ring-secondary/10"
                       />
                     </div>
@@ -941,31 +942,60 @@ const CreateShipment = () => {
                     </div>
 
                     {/* VOLUMETRIC */}
+                    {/* DIMENSIONS (VOLUMETRIC CALCULATION) */}
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Volumetric Weight
+                        Dimensions (Length × Width × Height in cm)
                       </label>
 
-                      <div className="relative">
+                      <div className="grid grid-cols-3 gap-3">
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={form.volumetricWeightKg}
+                          value={form.lengthCm}
                           onChange={(e) =>
-                            handleChange("volumetricWeightKg", e.target.value)
+                            handleChange("lengthCm", e.target.value)
                           }
-                          placeholder="6.00"
-                          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 pr-14 text-sm outline-none transition placeholder:text-gray-400 focus:border-secondary focus:ring-4 focus:ring-secondary/10"
+                          placeholder="L (cm)"
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-secondary focus:ring-4 focus:ring-secondary/10"
                         />
 
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-                          KG
-                        </span>
-                      </div>
-                    </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.widthCm}
+                          onChange={(e) =>
+                            handleChange("widthCm", e.target.value)
+                          }
+                          placeholder="W (cm)"
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-secondary focus:ring-4 focus:ring-secondary/10"
+                        />
 
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.heightCm}
+                          onChange={(e) =>
+                            handleChange("heightCm", e.target.value)
+                          }
+                          placeholder="H (cm)"
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-secondary focus:ring-4 focus:ring-secondary/10"
+                        />
+                      </div>
+
+                      {calculation.volumetric > 0 && (
+                        <p className="mt-1.5 text-xs text-gray-500">
+                          Calculated Volumetric Weight:{" "}
+                          <span className="font-semibold text-gray-700">
+                            {calculation.volumetric.toFixed(2)} KG
+                          </span>
+                        </p>
+                      )}
+                    </div>
                     {/* RATE */}
 
                     <div>

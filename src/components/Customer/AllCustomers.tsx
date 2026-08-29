@@ -427,185 +427,178 @@ export default function AllCustomers() {
           TABLE
       ====================================================== */}
 
-      <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1050px] text-sm">
-            <thead className="border-b bg-slate-50">
+      <div className="overflow-x-auto">
+        <table className="w-full border text-sm min-w-[900px]">
+          <thead className="bg-secondary text-white">
+            <tr>
+              <th className="px-4 py-3 text-left font-semibold">Customer</th>
+
+              <th className="px-4 py-3 text-left font-semibold">Contact</th>
+
+              <th className="px-4 py-3 text-left font-semibold">Address</th>
+
+              <th className="px-4 py-3 text-center font-semibold">Shipments</th>
+
+              <th className="px-4 py-3 text-center font-semibold">Status</th>
+
+              <th className="px-4 py-3 text-left font-semibold">Created</th>
+
+              <th className="px-4 py-3 text-center font-semibold">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y">
+            {loading ? (
               <tr>
-                <th className="px-4 py-3 text-left font-semibold">Customer</th>
+                <td colSpan={7} className="px-4 py-16 text-center">
+                  <RefreshCw
+                    size={28}
+                    className="mx-auto animate-spin text-blue-600"
+                  />
 
-                <th className="px-4 py-3 text-left font-semibold">Contact</th>
-
-                <th className="px-4 py-3 text-left font-semibold">Address</th>
-
-                <th className="px-4 py-3 text-center font-semibold">
-                  Shipments
-                </th>
-
-                <th className="px-4 py-3 text-center font-semibold">Status</th>
-
-                <th className="px-4 py-3 text-left font-semibold">Created</th>
-
-                <th className="px-4 py-3 text-center font-semibold">Actions</th>
+                  <p className="mt-3 text-slate-500">Loading customers...</p>
+                </td>
               </tr>
-            </thead>
+            ) : filteredCustomers.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-16 text-center">
+                  <Users size={42} className="mx-auto text-slate-300" />
 
-            <tbody className="divide-y">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-16 text-center">
-                    <RefreshCw
-                      size={28}
-                      className="mx-auto animate-spin text-blue-600"
-                    />
+                  <p className="mt-3 font-medium text-slate-600">
+                    No customers found
+                  </p>
 
-                    <p className="mt-3 text-slate-500">Loading customers...</p>
-                  </td>
-                </tr>
-              ) : filteredCustomers.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-16 text-center">
-                    <Users size={42} className="mx-auto text-slate-300" />
+                  <p className="mt-1 text-sm text-slate-400">
+                    Try changing your search or filters.
+                  </p>
+                </td>
+              </tr>
+            ) : (
+              filteredCustomers.map((customer) => (
+                <tr key={customer.id} className="transition hover:bg-slate-50">
+                  {/* Customer */}
 
-                    <p className="mt-3 font-medium text-slate-600">
-                      No customers found
-                    </p>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
+                        {customer.fullName.charAt(0).toUpperCase()}
+                      </div>
 
-                    <p className="mt-1 text-sm text-slate-400">
-                      Try changing your search or filters.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredCustomers.map((customer) => (
-                  <tr
-                    key={customer.id}
-                    className="transition hover:bg-slate-50"
-                  >
-                    {/* Customer */}
+                      <div>
+                        <p className="font-semibold text-slate-800">
+                          {customer.fullName}
+                        </p>
 
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
-                          {customer.fullName.charAt(0).toUpperCase()}
-                        </div>
-
-                        <div>
-                          <p className="font-semibold text-slate-800">
-                            {customer.fullName}
+                        {isAdmin && customer.partner && (
+                          <p className="text-xs text-slate-400">
+                            {customer.partner.companyName}
                           </p>
-
-                          {isAdmin && customer.partner && (
-                            <p className="text-xs text-slate-400">
-                              {customer.partner.companyName}
-                            </p>
-                          )}
-                        </div>
+                        )}
                       </div>
-                    </td>
+                    </div>
+                  </td>
 
-                    {/* Contact */}
+                  {/* Contact */}
 
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2 text-slate-700">
-                        <Phone size={14} className="text-slate-400" />
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <Phone size={14} className="text-slate-400" />
 
-                        {customer.phone || "—"}
+                      {customer.phone || "—"}
+                    </div>
+
+                    {customer.email && (
+                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                        <Mail size={13} className="text-slate-400" />
+
+                        {customer.email}
                       </div>
+                    )}
+                  </td>
 
-                      {customer.email && (
-                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                          <Mail size={13} className="text-slate-400" />
+                  {/* Address */}
 
-                          {customer.email}
-                        </div>
-                      )}
-                    </td>
+                  <td className="max-w-[220px] px-4 py-4">
+                    <div className="flex items-start gap-2">
+                      <MapPin
+                        size={15}
+                        className="mt-0.5 shrink-0 text-slate-400"
+                      />
 
-                    {/* Address */}
-
-                    <td className="max-w-[220px] px-4 py-4">
-                      <div className="flex items-start gap-2">
-                        <MapPin
-                          size={15}
-                          className="mt-0.5 shrink-0 text-slate-400"
-                        />
-
-                        <span className="truncate text-slate-600">
-                          {customer.address || "—"}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Shipments */}
-
-                    <td className="px-4 py-4 text-center">
-                      <span className="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">
-                        {customer._count?.shipments || 0}
+                      <span className="truncate text-slate-600">
+                        {customer.address || "—"}
                       </span>
-                    </td>
+                    </div>
+                  </td>
 
-                    {/* Status */}
+                  {/* Shipments */}
 
-                    <td className="px-4 py-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleStatus(customer)}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          customer.isActive
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
+                  <td className="px-4 py-4 text-center">
+                    <span className="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">
+                      {customer._count?.shipments || 0}
+                    </span>
+                  </td>
+
+                  {/* Status */}
+
+                  <td className="px-4 py-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleStatus(customer)}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        customer.isActive
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {customer.isActive ? "Active" : "Inactive"}
+                    </button>
+                  </td>
+
+                  {/* Created */}
+
+                  <td className="px-4 py-4 text-slate-500">
+                    {formatDate(customer.createdAt)}
+                  </td>
+
+                  {/* Actions */}
+
+                  <td className="px-4 py-4">
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        title="View"
+                        onClick={() => handleView(customer)}
                       >
-                        {customer.isActive ? "Active" : "Inactive"}
-                      </button>
-                    </td>
+                        <Eye size={17} />
+                      </Button>
 
-                    {/* Created */}
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        title="Edit"
+                        onClick={() => handleEdit(customer)}
+                      >
+                        <Pencil size={17} />
+                      </Button>
 
-                    <td className="px-4 py-4 text-slate-500">
-                      {formatDate(customer.createdAt)}
-                    </td>
-
-                    {/* Actions */}
-
-                    <td className="px-4 py-4">
-                      <div className="flex justify-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          title="View"
-                          onClick={() => handleView(customer)}
-                        >
-                          <Eye size={17} />
-                        </Button>
-
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          title="Edit"
-                          onClick={() => handleEdit(customer)}
-                        >
-                          <Pencil size={17} />
-                        </Button>
-
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          title="Delete"
-                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                          onClick={() => handleDelete(customer)}
-                        >
-                          <Trash2 size={17} />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        title="Delete"
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => handleDelete(customer)}
+                      >
+                        <Trash2 size={17} />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* ======================================================

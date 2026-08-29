@@ -139,25 +139,33 @@ export default function Footer() {
 
           {/* Contact */}
           <div>
-            <h4 className="text-white text-xl font-semibold mb-6">Contact</h4>
+            <h4 className="text-white text-xl font-semibold mb-6">
+              Cameroon Contact
+            </h4>
 
             <div className="space-y-5">
-              <div className="flex gap-3">
-                <Mail className="text-amber-400 mt-1" size={18} />
+              <div className="flex gap-3 text-slate-400">
+                <Mail className="mt-1" size={18} />
                 <span className="text-slate-400">
                   support@gilbricelogistics.com
                 </span>
               </div>
 
-              <div className="flex gap-3">
-                <Phone className="text-amber-400 mt-1" size={18} />
-                <span className="text-slate-400">+880 1XXX-XXXXXX</span>
+              <div className="flex gap-3 text-slate-400">
+                <Phone className="mt-1 text-slate-400" size={18} />
+                Founder:
+                <span className="text-slate-400">+1 (304) 907-7812</span>
               </div>
 
-              <div className="flex gap-3">
-                <MapPin className="text-amber-400 mt-1" size={18} />
+              <div className="flex gap-3 text-slate-400">
+                <MapPin className=" mt-1" size={18} /> Advisor:
+                <span className="text-slate-400">+1 (240) 547-8094</span>
+              </div>
+
+              <div className="flex gap-3 text-slate-400">
+                <MapPin className=" mt-1" size={18} /> Address
                 <span className="text-slate-400">
-                  Gilbrice Logistics HQ, Dhaka, Bangladesh
+                  Reynoldsburg, OH 43068, USA
                 </span>
               </div>
             </div>

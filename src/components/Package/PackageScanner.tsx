@@ -3,6 +3,7 @@
 import api from "@/lib/axios";
 import { formatDateTimeUS } from "@/lib/date";
 import { getTimeZoneByLocation } from "@/lib/timezone";
+import { RootState } from "@/Redux/store";
 import {
   AlertCircle,
   Barcode,
@@ -22,6 +23,7 @@ import {
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useSelector } from "react-redux";
 
 /* ============================================================
    TYPES
@@ -159,22 +161,22 @@ const getStatusClass = (status: string) => {
 ============================================================ */
 
 const PackageScanner = () => {
+  "use client";
+
+  // ...
+
   const params = useParams();
+  const user = useSelector((state: RootState) => state.auth.user);
 
-  /*
-   * Route:
-   * /partners/[partnerId]/scanner
-   *
-   * তাই partnerId URL থেকেই নেওয়া হচ্ছে।
-   */
-  const routePartnerId = params?.partnerId;
-
-  const partnerId =
-    typeof routePartnerId === "string"
-      ? routePartnerId
-      : Array.isArray(routePartnerId)
-        ? routePartnerId[0]
+  const routePartnerId =
+    typeof params?.partnerId === "string"
+      ? params.partnerId
+      : Array.isArray(params?.partnerId)
+        ? params.partnerId[0]
         : "";
+
+  // route-এ থাকলে সেটা priority পাবে, নাহলে Redux state-এর partnerId
+  const partnerId = routePartnerId || user?.partnerId || "";
 
   const inputRef = useRef<HTMLInputElement>(null);
 

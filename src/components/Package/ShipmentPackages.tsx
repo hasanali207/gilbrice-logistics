@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Edit3,
   Loader2,
-  MoreHorizontal,
   PackagePlus,
   Printer,
   Ruler,
@@ -14,8 +13,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { Button } from "../ui/button";
 import { packageLabelPdf } from "./packageLabelPdf";
 interface Shipment {
   id: string;
@@ -56,6 +56,7 @@ interface ShipmentPackagesProps {
   shipmentId: string;
   partnerId?: string;
   shipmentStatus?: string;
+  onPackagesChanged?: () => void;
 }
 
 interface PackageForm {
@@ -78,6 +79,7 @@ const ShipmentPackages = ({
   shipmentId,
   partnerId,
   shipmentStatus,
+  onPackagesChanged,
 }: ShipmentPackagesProps) => {
   const [packages, setPackages] = useState<PackageData[]>([]);
 
@@ -90,7 +92,7 @@ const ShipmentPackages = ({
   const [editingPackage, setEditingPackage] = useState<PackageData | null>(
     null,
   );
-
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -100,7 +102,19 @@ const ShipmentPackages = ({
   // ============================================================
   // LOCKED SHIPMENT
   // ============================================================
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
 
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
   const isLocked =
     shipmentStatus === "DELIVERED" || shipmentStatus === "CANCELLED";
 
@@ -289,6 +303,7 @@ const ShipmentPackages = ({
       closeForm();
 
       await fetchPackages();
+      onPackagesChanged?.();
     } catch (error: any) {
       console.error(error);
 
@@ -325,6 +340,7 @@ const ShipmentPackages = ({
       setOpenMenu(null);
 
       await fetchPackages();
+      onPackagesChanged?.();
     } catch (error: any) {
       console.error(error);
 
@@ -617,32 +633,13 @@ const ShipmentPackages = ({
 
                     {/* ACTION */}
 
-                    <div className="relative">
-                      {/* <Link
-                        href={`${basePath}/shipments/${shipmentId}/package/${item.id}/label${
-                          partnerId
-                            ? `?partnerId=${encodeURIComponent(partnerId)}`
-                            : ""
-                        }`}
-                      >
-                        Print Label
-                      </Link> */}
-                      <button
+                    <div ref={menuRef} className="flex items-center gap-2">
+                      {/* PRINT */}
+                      <Button
                         type="button"
                         onClick={() => handlePrintLabel(item.id)}
                         disabled={printingId === item.id}
-                        className="
-    inline-flex items-center gap-2
-    px-3 py-2
-    rounded-lg
-    border border-gray-200
-    bg-white
-    text-sm font-medium
-    text-gray-700
-    hover:bg-gray-50
-    disabled:opacity-50
-    disabled:cursor-not-allowed
-  "
+                        className=""
                       >
                         {printingId === item.id ? (
                           <Loader2 size={15} className="animate-spin" />
@@ -650,46 +647,70 @@ const ShipmentPackages = ({
                           <Printer size={15} />
                         )}
 
-                        {printingId === item.id
-                          ? "Preparing..."
-                          : "Print Label"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenMenu(openMenu === item.id ? null : item.id)
-                        }
-                        className="w-9 h-9 rounded-lg border border-gray-200 bg-white flex items-center justify-center hover:bg-gray-100"
-                      >
-                        <MoreHorizontal size={18} className="text-gray-600" />
-                      </button>
-                      {openMenu === item.id && (
-                        <div className="absolute right-0 top-11 z-20 w-44 bg-white border border-gray-200 rounded-xl shadow-lg p-1">
-                          <button
-                            type="button"
-                            disabled={isLocked}
-                            onClick={() => openEdit(item)}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                          >
-                            <Edit3 size={15} />
-                            Edit Package
-                          </button>
+                        <span>
+                          {printingId === item.id ? "Preparing..." : "Print"}
+                        </span>
+                      </Button>
 
-                          <button
-                            type="button"
-                            disabled={isLocked || deletingId === item.id}
-                            onClick={() => handleDelete(item.id)}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
-                          >
-                            {deletingId === item.id ? (
-                              <Loader2 size={15} className="animate-spin" />
-                            ) : (
-                              <Trash2 size={15} />
-                            )}
-                            Delete Package
-                          </button>
-                        </div>
-                      )}
+                      {/* EDIT */}
+                      <Button
+                        type="button"
+                        disabled={isLocked}
+                        onClick={() => openEdit(item)}
+                        className="
+      h-9
+      w-9
+      p-0
+      inline-flex
+      items-center
+      justify-center
+      rounded-lg
+      border
+      border-gray-200
+      bg-white
+      text-gray-600
+      shadow-sm
+      hover:bg-gray-50
+      hover:text-gray-900
+      transition-colors
+      disabled:opacity-40
+      disabled:cursor-not-allowed
+    "
+                      >
+                        <Edit3 size={15} />
+                      </Button>
+
+                      {/* DELETE */}
+                      <Button
+                        type="button"
+                        disabled={isLocked || deletingId === item.id}
+                        onClick={() => handleDelete(item.id)}
+                        className="
+      h-9
+      w-9
+      p-0
+      inline-flex
+      items-center
+      justify-center
+      rounded-lg
+      border
+      border-red-100
+      bg-red-50
+      text-red-600
+      shadow-sm
+      hover:bg-red-100
+      hover:text-red-700
+      transition-colors
+      disabled:opacity-40
+      disabled:cursor-not-allowed
+    "
+                      >
+                        {deletingId === item.id ? (
+                          <Loader2 size={15} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={15} />
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </div>

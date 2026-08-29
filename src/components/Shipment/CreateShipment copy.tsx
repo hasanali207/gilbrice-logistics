@@ -719,7 +719,7 @@ const CreateShipment = () => {
                           onChange={(e) =>
                             handleChange("origin", e.target.value)
                           }
-                          placeholder="Dhaka, Bangladesh"
+                          placeholder="Houston, US"
                           className={`${inputClass} pl-10`}
                         />
                       </div>

@@ -284,7 +284,7 @@ const Price = ({
 
 const ShipmentDetails = () => {
   const router = useRouter();
-
+  const VOLUMETRIC_DIVISOR = 5000;
   const params = useParams();
   const searchParams = useSearchParams();
 
@@ -322,13 +322,27 @@ const ShipmentDetails = () => {
     destination: "",
 
     actualWeightKg: "",
-    volumetricWeightKg: "",
+    lengthCm: "", // 👈 নতুন
+    widthCm: "", // 👈 নতুন
+    heightCm: "", // 👈 নতুন
 
     retailRatePerKg: "",
 
     discount: "",
     additionalFees: "",
   });
+
+  const calculatedVolumetricWeight = useMemo(() => {
+    const l = Number(editForm.lengthCm || 0);
+    const w = Number(editForm.widthCm || 0);
+    const h = Number(editForm.heightCm || 0);
+
+    if (l > 0 && w > 0 && h > 0) {
+      return (l * w * h) / VOLUMETRIC_DIVISOR;
+    }
+
+    return 0;
+  }, [editForm.lengthCm, editForm.widthCm, editForm.heightCm]);
 
   const [statusForm, setStatusForm] = useState({
     status: "",
@@ -339,9 +353,7 @@ const ShipmentDetails = () => {
   const populateForms = (data: Shipment) => {
     setEditForm({
       mode: data.mode || "",
-
       origin: data.origin || "",
-
       destination: data.destination || "",
 
       actualWeightKg:
@@ -349,11 +361,9 @@ const ShipmentDetails = () => {
           ? String(data.actualWeightKg)
           : "",
 
-      volumetricWeightKg:
-        data.volumetricWeightKg !== undefined &&
-        data.volumetricWeightKg !== null
-          ? String(data.volumetricWeightKg)
-          : "",
+      lengthCm: "", // 👈 dimension store করা হয় না, তাই খালি শুরু হবে
+      widthCm: "",
+      heightCm: "",
 
       retailRatePerKg:
         data.retailRatePerKg !== undefined && data.retailRatePerKg !== null
@@ -459,15 +469,12 @@ const ShipmentDetails = () => {
       return;
     }
 
+    // যদি dimension দেওয়া হয়, নতুন calculated volumetric ব্যবহার হবে
+    // যদি dimension খালি রাখা হয়, existing shipment এর volumetric weight ই থাকবে (change হবে না)
     const volumetricWeight =
-      editForm.volumetricWeightKg === ""
-        ? undefined
-        : Number(editForm.volumetricWeightKg);
-
-    if (volumetricWeight !== undefined && volumetricWeight < 0) {
-      toast.error("Volumetric weight cannot be negative");
-      return;
-    }
+      calculatedVolumetricWeight > 0
+        ? calculatedVolumetricWeight
+        : Number(shipment.volumetricWeightKg || 0);
 
     const retailRate = Number(editForm.retailRatePerKg);
 
@@ -481,19 +488,12 @@ const ShipmentDetails = () => {
 
       const payload = {
         mode: editForm.mode,
-
         origin: editForm.origin.trim(),
-
         destination: editForm.destination.trim(),
-
         actualWeightKg: actualWeight,
-
-        volumetricWeightKg: volumetricWeight,
-
+        volumetricWeightKg: volumetricWeight, // 👈 এটা একই থাকবে, শুধু source পাল্টালো
         retailRatePerKg: retailRate,
-
         discount: Number(editForm.discount || 0),
-
         additionalFees: Number(editForm.additionalFees || 0),
       };
 
@@ -804,7 +804,7 @@ const ShipmentDetails = () => {
                     location: e.target.value,
                   }))
                 }
-                placeholder="Dhaka Warehouse"
+                placeholder="Houston, US"
                 className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
               />
             </div>
@@ -926,22 +926,61 @@ const ShipmentDetails = () => {
                 className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
               />
             </div>
-
-            <div>
+            <div className="sm:col-span-2 xl:col-span-3">
               <label className="text-sm font-medium text-gray-700">
-                Volumetric Weight KG
+                Dimensions (L × W × H in cm) — Volumetric Weight
               </label>
 
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={editForm.volumetricWeightKg}
-                onChange={(e) =>
-                  handleEditChange("volumetricWeightKg", e.target.value)
-                }
-                className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
-              />
+              <div className="grid grid-cols-3 gap-3 mt-1.5">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.lengthCm}
+                  onChange={(e) => handleEditChange("lengthCm", e.target.value)}
+                  placeholder="Length (cm)"
+                  className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+                />
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.widthCm}
+                  onChange={(e) => handleEditChange("widthCm", e.target.value)}
+                  placeholder="Width (cm)"
+                  className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+                />
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.heightCm}
+                  onChange={(e) => handleEditChange("heightCm", e.target.value)}
+                  placeholder="Height (cm)"
+                  className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+                />
+              </div>
+
+              <p className="mt-2 text-xs text-gray-500">
+                {calculatedVolumetricWeight > 0 ? (
+                  <>
+                    New calculated volumetric weight:{" "}
+                    <span className="font-semibold text-gray-700">
+                      {calculatedVolumetricWeight.toFixed(2)} KG
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Current volumetric weight:{" "}
+                    <span className="font-semibold text-gray-700">
+                      {Number(shipment.volumetricWeightKg || 0).toFixed(2)} KG
+                    </span>{" "}
+                    (leave dimensions empty to keep unchanged)
+                  </>
+                )}
+              </p>
             </div>
 
             <div>
@@ -1074,6 +1113,7 @@ const ShipmentDetails = () => {
             shipmentId={shipment.id}
             partnerId={partnerId}
             shipmentStatus={shipment.status}
+            onPackagesChanged={fetchShipment}
           />
 
           <SectionCard title="Status History">

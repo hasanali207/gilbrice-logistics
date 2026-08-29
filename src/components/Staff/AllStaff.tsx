@@ -28,14 +28,11 @@ import {
 import { selectCurrentUser } from "@/Redux/Features/Auth/authSlice";
 import { useAppSelector } from "@/Redux/hook";
 
-import axios from "axios";
+import api from "@/lib/axios";
 import CreateStaffModal from "./CreateStaffModal";
 import EditStaffModal from "./EditStaffModal";
 import StaffStatusDialog from "./StaffStatusDialog";
 import ViewStaffModal from "./ViewStaffModal";
-
-const BASE_API =
-  process.env.NEXT_PUBLIC_BASE_API || "http://localhost:5000/api/v1";
 
 export type StaffRole =
   | "GILBRICE_SUPER_ADMIN"
@@ -101,17 +98,11 @@ export default function AllStaff() {
     try {
       setLoading(true);
 
-      const token = localStorage.getItem("token");
-
-      const response = await axios.get(`${BASE_API}/staff`, {
-        headers: {
-          Authorization: token || "",
-        },
-      });
+      const response = await api.get(`/api/v1/user/staff`);
 
       const data = response.data?.data ?? response.data;
 
-      setStaff(Array.isArray(data) ? data : []);
+      setStaff(data);
     } catch (error) {
       console.error("Failed to load staff:", error);
       setStaff([]);
@@ -153,8 +144,9 @@ export default function AllStaff() {
 
   const totalStaff = staff.length;
 
-  const activeStaff = staff.filter((member) => member.status === "ACTIVE")
-    .length;
+  const activeStaff = staff.filter(
+    (member) => member.status === "ACTIVE",
+  ).length;
 
   const suspendedStaff = staff.filter(
     (member) => member.status !== "ACTIVE",
@@ -279,9 +271,7 @@ export default function AllStaff() {
 
             <SelectContent>
               <SelectItem value="ALL">All Roles</SelectItem>
-              <SelectItem value="GILBRICE_SUPER_ADMIN">
-                Super Admin
-              </SelectItem>
+              <SelectItem value="GILBRICE_SUPER_ADMIN">Super Admin</SelectItem>
               <SelectItem value="GILBRICE_ADMIN">Admin</SelectItem>
               <SelectItem value="GILBRICE_FINANCE">Finance</SelectItem>
             </SelectContent>
@@ -317,15 +307,11 @@ export default function AllStaff() {
 
                 <th className="px-4 py-3 text-left font-semibold">Role</th>
 
-                <th className="px-4 py-3 text-center font-semibold">
-                  Status
-                </th>
+                <th className="px-4 py-3 text-center font-semibold">Status</th>
 
                 <th className="px-4 py-3 text-left font-semibold">Joined</th>
 
-                <th className="px-4 py-3 text-center font-semibold">
-                  Actions
-                </th>
+                <th className="px-4 py-3 text-center font-semibold">Actions</th>
               </tr>
             </thead>
 
@@ -471,7 +457,11 @@ export default function AllStaff() {
         onSuccess={fetchStaff}
       />
 
-      <ViewStaffModal open={viewOpen} onOpenChange={setViewOpen} staff={viewStaff} />
+      <ViewStaffModal
+        open={viewOpen}
+        onOpenChange={setViewOpen}
+        staff={viewStaff}
+      />
 
       <StaffStatusDialog
         open={statusOpen}

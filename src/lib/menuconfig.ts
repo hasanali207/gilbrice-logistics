@@ -77,11 +77,6 @@ export const getMenus = (
           icon: UserPlus,
           href: `${basePath}/shipments/create`,
         },
-        {
-          name: "Shipment Tracking",
-          icon: UserRoundSearch,
-          href: `${basePath}/shipments/tracking`,
-        },
       ],
     },
 
@@ -90,11 +85,6 @@ export const getMenus = (
       name: "Packages",
       icon: Package,
       sub: [
-        {
-          name: "All Packages",
-          icon: FileIcon,
-          href: `${basePath}/packages`,
-        },
         {
           name: "Package Scan",
           icon: ScanLine,
@@ -164,11 +154,6 @@ export const getMenus = (
           icon: UserPlus,
           href: `${basePath}/partners/create`,
         },
-        {
-          name: "All Ledger",
-          icon: FileDown,
-          href: `${basePath}/partners/ledger`,
-        },
       ],
     },
 
@@ -181,17 +166,6 @@ export const getMenus = (
           name: "All Payments",
           icon: BarChart3,
           href: `${basePath}/payments`,
-        },
-        {
-          name: "Payment Settelment",
-          icon: UserPlus,
-          href: `${basePath}/settlements`,
-        },
-
-        {
-          name: "Payment History",
-          icon: FileDown,
-          href: `${basePath}/payments/history`,
         },
       ],
     },
