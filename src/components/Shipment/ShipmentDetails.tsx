@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  getAllowedNextShipmentStatuses,
+  getShipmentStatusClass,
+  getShipmentStatusLabel,
+} from "@/constants/shipment-status";
 import api from "@/lib/axios";
 import { getDashboardPath } from "@/lib/route";
 import { RootState } from "@/Redux/store";
@@ -21,6 +26,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
+
 import ShipmentPackages from "../Package/ShipmentPackages";
 import { Button } from "../ui/button";
 
@@ -28,20 +34,7 @@ import { Button } from "../ui/button";
 // OPTIONS
 // ============================================================
 
-const STATUS_OPTIONS = [
-  "BOOKED",
-  "RECEIVED",
-  "WEIGHED",
-  "MANIFESTED",
-  "LOADED",
-  "DEPARTED",
-  "ARRIVED",
-  "READY_FOR_PICKUP",
-  "DELIVERED",
-  "CANCELLED",
-];
-
-const MODE_OPTIONS = ["AIR", "SEA", "ROAD", "COURIER"];
+const MODE_OPTIONS = ["AIR", "SEA"] as const;
 
 // ============================================================
 // TYPES
@@ -57,6 +50,17 @@ interface ShipmentStatusHistory {
 
 interface ShipmentPackage {
   id: string;
+  packageCode?: string;
+  packageNumber?: number;
+  description?: string | null;
+  weightKg?: number | string;
+  lengthCm?: number | string | null;
+  widthCm?: number | string | null;
+  heightCm?: number | string | null;
+  image1?: string | null;
+  image2?: string | null;
+  image3?: string | null;
+  status?: string;
   [key: string]: any;
 }
 
@@ -97,6 +101,14 @@ interface Shipment {
   amountPaidByCustomer: number | string;
   customerBalance: number | string;
 
+  waybillNumber?: string | null;
+  carrierId?: string | null;
+
+  carrier: {
+    name: string;
+    code: string;
+  } | null;
+
   createdAt: string;
   updatedAt?: string;
 
@@ -104,7 +116,6 @@ interface Shipment {
     id: string;
     companyName: string;
     trackingPrefix: string;
-
     [key: string]: any;
   };
 
@@ -129,12 +140,21 @@ interface Shipment {
   ledgerEntry?: any;
 }
 
+interface Location {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  type: string;
+  isActive: boolean;
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
 
-const formatAmount = (value: number | string | null | undefined) => {
-  return Number(value || 0).toLocaleString("en-BD", {
+const formatAmount = (value: number | string | null | undefined): string => {
+  return Number(value || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -153,41 +173,8 @@ const formatDate = (value?: string) => {
   });
 };
 
-const displayStatus = (status?: string) => {
-  if (!status) return "—";
-
-  return status.replaceAll("_", " ");
-};
-
-const statusClass = (status: string) => {
-  switch (status) {
-    case "DELIVERED":
-      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
-
-    case "CANCELLED":
-      return "bg-red-50 text-red-700 ring-1 ring-red-200";
-
-    case "ARRIVED":
-    case "READY_FOR_PICKUP":
-      return "bg-blue-50 text-blue-700 ring-1 ring-blue-200";
-
-    case "DEPARTED":
-    case "LOADED":
-      return "bg-purple-50 text-purple-700 ring-1 ring-purple-200";
-
-    case "BOOKED":
-    case "RECEIVED":
-    case "WEIGHED":
-    case "MANIFESTED":
-      return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
-
-    default:
-      return "bg-orange-50 text-orange-700 ring-1 ring-orange-200";
-  }
-};
-
 // ============================================================
-// SECTION CARD WRAPPER
+// SECTION CARD
 // ============================================================
 
 const SectionCard = ({
@@ -204,12 +191,15 @@ const SectionCard = ({
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 px-5 sm:px-6 lg:px-7 pt-5 sm:pt-6 pb-4 sm:pb-5 border-b border-gray-100 min-w-0">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+
           {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
         </div>
+
         {action}
       </div>
+
       <div className="px-5 sm:px-6 lg:px-7 py-5 sm:py-6 min-w-0 overflow-hidden">
         {children}
       </div>
@@ -218,7 +208,7 @@ const SectionCard = ({
 };
 
 // ============================================================
-// INFO COMPONENT
+// INFO
 // ============================================================
 
 const Info = ({ label, value }: { label: string; value: string | number }) => {
@@ -236,7 +226,7 @@ const Info = ({ label, value }: { label: string; value: string | number }) => {
 };
 
 // ============================================================
-// PRICE COMPONENT
+// PRICE
 // ============================================================
 
 const Price = ({
@@ -284,7 +274,7 @@ const Price = ({
 
 const ShipmentDetails = () => {
   const router = useRouter();
-  const VOLUMETRIC_DIVISOR = 5000;
+
   const params = useParams();
   const searchParams = useSearchParams();
 
@@ -296,6 +286,16 @@ const ShipmentDetails = () => {
 
   const urlPartnerId = searchParams.get("partnerId") || "";
 
+  // ==========================================================
+  // PACKAGE MODAL
+  // ==========================================================
+
+  const [packagesModalOpen, setPackagesModalOpen] = useState(false);
+
+  // ==========================================================
+  // PARTNER
+  // ==========================================================
+
   const [resolvedPartnerId, setResolvedPartnerId] = useState("");
 
   const partnerId = useMemo(() => {
@@ -304,33 +304,89 @@ const ShipmentDetails = () => {
 
   const query = partnerId ? `?partnerId=${encodeURIComponent(partnerId)}` : "";
 
+  // ==========================================================
+  // SHIPMENT
+  // ==========================================================
+
   const [shipment, setShipment] = useState<Shipment | null>(null);
 
   const [loading, setLoading] = useState(true);
 
   const [refreshing, setRefreshing] = useState(false);
 
+  // ==========================================================
+  // EDIT
+  // ==========================================================
+
   const [editing, setEditing] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
+  // ==========================================================
+  // STATUS
+  // ==========================================================
+
   const [changingStatus, setChangingStatus] = useState(false);
 
+  const [statusForm, setStatusForm] = useState({
+    status: "",
+    note: "",
+    location: "",
+  });
+
+  // ==========================================================
+  // CARRIER
+  // ==========================================================
+
+  const [carriers, setCarriers] = useState<any[]>([]);
+
+  const [selectedCarrierId, setSelectedCarrierId] = useState("");
+
+  const [waybillNumber, setWaybillNumber] = useState("");
+
+  const [carrierLoading, setCarrierLoading] = useState(false);
+
+  const [carrierSaving, setCarrierSaving] = useState(false);
+
+  const [showCarrierForm, setShowCarrierForm] = useState(false);
+
+  // ==========================================================
+  // LOCATIONS
+  // ==========================================================
+
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  const [loadingLocations, setLoadingLocations] = useState(false);
+
+  // ==========================================================
+  // EDIT FORM
+  // ==========================================================
+
   const [editForm, setEditForm] = useState({
-    mode: "",
-    origin: "",
-    destination: "",
+    originId: "",
+    destinationId: "",
 
     actualWeightKg: "",
-    lengthCm: "", // 👈 নতুন
-    widthCm: "", // 👈 নতুন
-    heightCm: "", // 👈 নতুন
+
+    lengthCm: "",
+    widthCm: "",
+    heightCm: "",
 
     retailRatePerKg: "",
 
     discount: "",
     additionalFees: "",
   });
+
+  // ==========================================================
+  // VOLUMETRIC DIVISOR
+  // ==========================================================
+
+  const VOLUMETRIC_DIVISOR = 5000;
+
+  // ==========================================================
+  // CALCULATED VOLUMETRIC WEIGHT
+  // ==========================================================
 
   const calculatedVolumetricWeight = useMemo(() => {
     const l = Number(editForm.lengthCm || 0);
@@ -344,24 +400,51 @@ const ShipmentDetails = () => {
     return 0;
   }, [editForm.lengthCm, editForm.widthCm, editForm.heightCm]);
 
-  const [statusForm, setStatusForm] = useState({
-    status: "",
-    note: "",
-    location: "",
-  });
+  // ==========================================================
+  // AVAILABLE STATUS OPTIONS
+  // ==========================================================
+
+  const availableStatusOptions = useMemo(() => {
+    return getAllowedNextShipmentStatuses(shipment?.status);
+  }, [shipment?.status]);
+
+  // ==========================================================
+  // EDITABLE STATUS
+  // ==========================================================
+
+  const editableStatuses = ["BOOKED", "RECEIVED", "PROCESSING", "WEIGHED"];
+
+  const canEdit = Boolean(
+    shipment && editableStatuses.includes(shipment.status),
+  );
+
+  // ==========================================================
+  // POPULATE FORM
+  // ==========================================================
 
   const populateForms = (data: Shipment) => {
+    const originLocation = locations.find(
+      (location) =>
+        location.name.trim().toLowerCase() ===
+        data.origin?.trim().toLowerCase(),
+    );
+
+    const destinationLocation = locations.find(
+      (location) =>
+        location.name.trim().toLowerCase() ===
+        data.destination?.trim().toLowerCase(),
+    );
+
     setEditForm({
-      mode: data.mode || "",
-      origin: data.origin || "",
-      destination: data.destination || "",
+      originId: originLocation?.id || "",
+      destinationId: destinationLocation?.id || "",
 
       actualWeightKg:
         data.actualWeightKg !== undefined && data.actualWeightKg !== null
           ? String(data.actualWeightKg)
           : "",
 
-      lengthCm: "", // 👈 dimension store করা হয় না, তাই খালি শুরু হবে
+      lengthCm: "",
       widthCm: "",
       heightCm: "",
 
@@ -382,19 +465,67 @@ const ShipmentDetails = () => {
     });
 
     setStatusForm({
-      status: data.status || "",
+      status: "",
       note: "",
       location: "",
     });
   };
 
-  const fetchShipment = async () => {
+  // ==========================================================
+  // FETCH LOCATIONS
+  // ==========================================================
+
+  const fetchLocations = async () => {
+    try {
+      setLoadingLocations(true);
+
+      const res = await api.get("/api/v1/locations?isActive=true");
+
+      setLocations(res.data?.data || []);
+    } catch (error: any) {
+      console.error("Failed to load locations:", error);
+
+      toast.error(error?.response?.data?.message || "Failed to load locations");
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+
+  // ==========================================================
+  // FETCH CARRIERS
+  // ==========================================================
+
+  const fetchCarriers = async () => {
+    try {
+      setCarrierLoading(true);
+
+      const res = await api.get("/api/v1/carrier");
+
+      setCarriers(res.data?.data || []);
+    } catch (error: any) {
+      console.error("Failed to load carriers:", error);
+
+      toast.error(error?.response?.data?.message || "Failed to load carriers");
+    } finally {
+      setCarrierLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // FETCH SHIPMENT
+  // ==========================================================
+
+  const fetchShipment = async (showInitialLoader = false) => {
     if (!shipmentId) return;
 
     try {
-      setRefreshing(true);
+      if (showInitialLoader) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
 
-      const url = `/api/v1/shipment/${shipmentId}${query}`;
+      const url = `/api/v1/shipment/${shipmentId}` + query;
 
       console.log("FETCH SHIPMENT:", url);
 
@@ -407,6 +538,10 @@ const ShipmentDetails = () => {
       }
 
       setShipment(data);
+
+      setSelectedCarrierId(data.carrierId || "");
+
+      setWaybillNumber(data.waybillNumber || "");
 
       if (data.partner?.id) {
         setResolvedPartnerId(data.partner.id);
@@ -428,13 +563,36 @@ const ShipmentDetails = () => {
     }
   };
 
+  // ==========================================================
+  // INITIAL LOAD
+  // ==========================================================
+
   useEffect(() => {
     if (!shipmentId) return;
 
-    fetchShipment();
+    fetchShipment(true);
+    fetchCarriers();
+    fetchLocations();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shipmentId, urlPartnerId]);
+
+  // ==========================================================
+  // REPOPULATE FORM WHEN LOCATIONS LOAD
+  // ==========================================================
+
+  useEffect(() => {
+    if (!shipment) return;
+    if (!locations.length) return;
+
+    populateForms(shipment);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locations]);
+
+  // ==========================================================
+  // EDIT CHANGE
+  // ==========================================================
 
   const handleEditChange = (field: keyof typeof editForm, value: string) => {
     setEditForm((prev) => ({
@@ -442,6 +600,10 @@ const ShipmentDetails = () => {
       [field]: value,
     }));
   };
+
+  // ==========================================================
+  // UPDATE SHIPMENT
+  // ==========================================================
 
   const handleUpdate = async () => {
     if (!shipment) return;
@@ -452,13 +614,25 @@ const ShipmentDetails = () => {
       return;
     }
 
-    if (!editForm.origin.trim()) {
+    if (!canEdit) {
+      toast.error("This shipment can no longer be edited");
+
+      return;
+    }
+
+    if (!editForm.originId) {
       toast.error("Origin is required");
       return;
     }
 
-    if (!editForm.destination.trim()) {
+    if (!editForm.destinationId) {
       toast.error("Destination is required");
+      return;
+    }
+
+    if (editForm.originId === editForm.destinationId) {
+      toast.error("Origin and destination cannot be the same");
+
       return;
     }
 
@@ -466,11 +640,10 @@ const ShipmentDetails = () => {
 
     if (!actualWeight || actualWeight <= 0) {
       toast.error("Actual weight must be greater than 0");
+
       return;
     }
 
-    // যদি dimension দেওয়া হয়, নতুন calculated volumetric ব্যবহার হবে
-    // যদি dimension খালি রাখা হয়, existing shipment এর volumetric weight ই থাকবে (change হবে না)
     const volumetricWeight =
       calculatedVolumetricWeight > 0
         ? calculatedVolumetricWeight
@@ -480,26 +653,56 @@ const ShipmentDetails = () => {
 
     if (retailRate < 0) {
       toast.error("Retail rate cannot be negative");
+
+      return;
+    }
+
+    const discount = Number(editForm.discount || 0);
+
+    const additionalFees = Number(editForm.additionalFees || 0);
+
+    if (discount < 0) {
+      toast.error("Discount cannot be negative");
+
+      return;
+    }
+
+    if (additionalFees < 0) {
+      toast.error("Additional fees cannot be negative");
+
       return;
     }
 
     try {
       setSaving(true);
 
+      // IMPORTANT:
+      // Backend UpdateShipmentPayload expects:
+      // originId
+      // destinationId
+      // actualWeightKg
+      // volumetricWeightKg
+      // retailRatePerKg
+      // discount
+      // additionalFees
       const payload = {
-        mode: editForm.mode,
-        origin: editForm.origin.trim(),
-        destination: editForm.destination.trim(),
+        originId: editForm.originId,
+        destinationId: editForm.destinationId,
+
         actualWeightKg: actualWeight,
-        volumetricWeightKg: volumetricWeight, // 👈 এটা একই থাকবে, শুধু source পাল্টালো
+
+        volumetricWeightKg: volumetricWeight > 0 ? volumetricWeight : undefined,
+
         retailRatePerKg: retailRate,
-        discount: Number(editForm.discount || 0),
-        additionalFees: Number(editForm.additionalFees || 0),
+
+        discount,
+
+        additionalFees,
       };
 
-      const url = `/api/v1/shipment/${shipment.id}${query}`;
+      const url = `/api/v1/shipment/${shipment.id}` + query;
 
-      console.log("UPDATE SHIPMENT:", url);
+      console.log("UPDATE SHIPMENT:", url, payload);
 
       const res = await api.patch(url, payload);
 
@@ -535,6 +738,10 @@ const ShipmentDetails = () => {
     }
   };
 
+  // ==========================================================
+  // UPDATE STATUS
+  // ==========================================================
+
   const handleStatusChange = async () => {
     if (!shipment) return;
 
@@ -546,11 +753,18 @@ const ShipmentDetails = () => {
 
     if (!statusForm.status) {
       toast.error("Status is required");
+
       return;
     }
 
-    if (statusForm.status === shipment.status) {
-      toast.error(`Shipment is already ${displayStatus(shipment.status)}`);
+    const allowedStatuses = getAllowedNextShipmentStatuses(shipment.status);
+
+    if (!allowedStatuses.includes(statusForm.status as any)) {
+      toast.error(
+        `Cannot change shipment status from ${getShipmentStatusLabel(
+          shipment.status,
+        )} to ${getShipmentStatusLabel(statusForm.status)}`,
+      );
 
       return;
     }
@@ -558,15 +772,13 @@ const ShipmentDetails = () => {
     try {
       setChangingStatus(true);
 
-      const url = `/api/v1/shipment/${shipment.id}/status${query}`;
+      const url = `/api/v1/shipment/${shipment.id}/status` + query;
 
       console.log("UPDATE SHIPMENT STATUS:", url);
 
       const res = await api.patch(url, {
         status: statusForm.status,
-
         note: statusForm.note.trim() || undefined,
-
         location: statusForm.location.trim() || undefined,
       });
 
@@ -583,7 +795,7 @@ const ShipmentDetails = () => {
       }
 
       setStatusForm({
-        status: updatedShipment.status,
+        status: "",
         note: "",
         location: "",
       });
@@ -604,6 +816,71 @@ const ShipmentDetails = () => {
     }
   };
 
+  // ==========================================================
+  // ATTACH CARRIER
+  // ==========================================================
+
+  const handleAttachCarrier = async () => {
+    if (!shipment) return;
+
+    if (!partnerId) {
+      toast.error("Partner information is required");
+
+      return;
+    }
+
+    if (!selectedCarrierId) {
+      toast.error("Please select a carrier");
+
+      return;
+    }
+
+    try {
+      setCarrierSaving(true);
+
+      const url = `/api/v1/shipment/${shipmentId}/carrier` + query;
+
+      console.log("ATTACH CARRIER:", url);
+
+      const res = await api.patch(url, {
+        carrierId: selectedCarrierId,
+        waybillNumber: waybillNumber.trim() || undefined,
+      });
+
+      const updatedShipment: Shipment = res.data?.data;
+
+      if (!updatedShipment) {
+        throw new Error("Updated shipment data not found");
+      }
+
+      setShipment(updatedShipment);
+
+      setSelectedCarrierId(updatedShipment.carrierId || "");
+
+      setWaybillNumber(updatedShipment.waybillNumber || "");
+
+      setShowCarrierForm(false);
+
+      toast.success("Carrier attached successfully");
+
+      await fetchShipment();
+    } catch (error: any) {
+      console.error("Failed to attach carrier:", error);
+
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to attach carrier",
+      );
+    } finally {
+      setCarrierSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // BACK
+  // ==========================================================
+
   const handleBack = () => {
     if (partnerId) {
       router.push(`${basePath}/partners/${partnerId}/shipments`);
@@ -614,19 +891,25 @@ const ShipmentDetails = () => {
     router.push(`${basePath}/shipments`);
   };
 
-  const canEdit =
-    shipment?.status !== "DELIVERED" && shipment?.status !== "CANCELLED";
+  // ==========================================================
+  // LOADING
+  // ==========================================================
 
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto py-24 px-4 sm:px-6">
         <div className="flex flex-col justify-center items-center text-gray-500 gap-3">
           <Loader2 className="animate-spin" size={24} />
+
           <span className="text-sm">Loading shipment...</span>
         </div>
       </div>
     );
   }
+
+  // ==========================================================
+  // NOT FOUND
+  // ==========================================================
 
   if (!shipment) {
     return (
@@ -647,8 +930,16 @@ const ShipmentDetails = () => {
     );
   }
 
+  // ==========================================================
+  // CUSTOMER
+  // ==========================================================
+
   const customerName =
     shipment.customer?.fullName || shipment.customer?.name || "—";
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
     <div className="w-full max-w-7xl mx-auto py-5 sm:py-7 lg:py-8 px-3 sm:px-5 lg:px-8 space-y-5 sm:space-y-6 lg:space-y-7 overflow-x-hidden">
@@ -656,8 +947,8 @@ const ShipmentDetails = () => {
           HEADER
       ====================================================== */}
 
-      <div className="flex flex-col  lg:items-center lg:justify-between gap-5 lg:gap-6 pb-1 min-w-0">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 lg:gap-6 pb-1 min-w-0">
+        <div className="min-w-0">
           <button
             onClick={handleBack}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition mb-5"
@@ -667,22 +958,22 @@ const ShipmentDetails = () => {
           </button>
 
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className="w-13 h-13 w-[52px] h-[52px] rounded-2xl bg-secondary/10 flex items-center justify-center shrink-0">
+            <div className="w-[52px] h-[52px] rounded-2xl bg-secondary/10 flex items-center justify-center shrink-0">
               <Truck size={24} className="text-secondary" />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight break-all">
                   {shipment.trackingNumber}
                 </h1>
 
                 <span
-                  className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${statusClass(
+                  className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${getShipmentStatusClass(
                     shipment.status,
                   )}`}
                 >
-                  {displayStatus(shipment.status)}
+                  {getShipmentStatusLabel(shipment.status)}
                 </span>
               </div>
 
@@ -693,13 +984,14 @@ const ShipmentDetails = () => {
           </div>
         </div>
 
-        <div className="flex gap-5 sm:gap-3 flex-wrap w-full lg:w-auto shrink-0">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={fetchShipment}
+            onClick={() => fetchShipment()}
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition min-h-11"
           >
             <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+
             {refreshing ? "Refreshing..." : "Refresh"}
           </button>
 
@@ -714,8 +1006,9 @@ const ShipmentDetails = () => {
           )}
 
           <Link href={`${basePath}/shipments/${shipmentId}/payment`}>
-            <Button size="sm" variant="outline">
-              <DollarSign size={14} /> Pay Payments
+            <Button size="sm" variant="outline" className="min-h-11 rounded-xl">
+              <DollarSign size={14} />
+              Pay Payments
             </Button>
           </Link>
         </div>
@@ -727,12 +1020,13 @@ const ShipmentDetails = () => {
 
       {partnerId && (
         <div className="bg-blue-50/70 border border-blue-100 rounded-2xl px-5 sm:px-6 lg:px-7 py-4 sm:py-5 overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             <div>
               <p className="text-xs text-blue-600 uppercase font-semibold tracking-wide">
                 Partner
               </p>
-              <p className="font-semibold text-gray-800 mt-1.5">
+
+              <p className="font-semibold text-gray-800 mt-1.5 break-words">
                 {shipment.partner?.companyName || "—"}
               </p>
             </div>
@@ -741,18 +1035,21 @@ const ShipmentDetails = () => {
               <p className="text-xs text-blue-600 uppercase font-semibold tracking-wide">
                 Tracking Prefix
               </p>
+
               <p className="font-mono font-semibold text-gray-800 mt-1.5">
                 {shipment.partner?.trackingPrefix || "—"}
               </p>
             </div>
 
+            <Info label="Created At" value={formatDate(shipment.createdAt)} />
+
             <div>
-              <p className="text-xs text-blue-600 uppercase font-semibold tracking-wide">
-                Partner ID
-              </p>
-              <p className="font-mono text-xs text-gray-600 mt-1.5 break-all">
-                {partnerId}
-              </p>
+              {shipment.updatedAt && (
+                <Info
+                  label="Last Updated"
+                  value={formatDate(shipment.updatedAt)}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -762,90 +1059,110 @@ const ShipmentDetails = () => {
           STATUS UPDATE
       ====================================================== */}
 
-      {canEdit && (
-        <SectionCard
-          title="Update Shipment Status"
-          subtitle="Change shipment status and optionally add location or note."
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 min-w-0">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Status
-              </label>
+      <SectionCard
+        title="Update Shipment Status"
+        subtitle="Move the shipment to the next allowed operational status."
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 min-w-0">
+          {/* STATUS */}
 
-              <select
-                value={statusForm.status}
-                onChange={(e) =>
-                  setStatusForm((prev) => ({
-                    ...prev,
-                    status: e.target.value,
-                  }))
-                }
-                className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
-              >
-                {STATUS_OPTIONS.map((item) => (
-                  <option key={item} value={item}>
-                    {displayStatus(item)}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Status</label>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Location
-              </label>
+            <select
+              value={statusForm.status}
+              onChange={(e) =>
+                setStatusForm((prev) => ({
+                  ...prev,
+                  status: e.target.value,
+                }))
+              }
+              className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+            >
+              <option value="">
+                {availableStatusOptions.length
+                  ? "Select next status"
+                  : "No next status available"}
+              </option>
 
-              <input
-                value={statusForm.location}
-                onChange={(e) =>
-                  setStatusForm((prev) => ({
-                    ...prev,
-                    location: e.target.value,
-                  }))
-                }
-                placeholder="Houston, US"
-                className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-700">Note</label>
-
-              <input
-                value={statusForm.note}
-                onChange={(e) =>
-                  setStatusForm((prev) => ({
-                    ...prev,
-                    note: e.target.value,
-                  }))
-                }
-                placeholder="Shipment arrived"
-                className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={handleStatusChange}
-                disabled={
-                  changingStatus ||
-                  !statusForm.status ||
-                  statusForm.status === shipment.status
-                }
-                className="w-full min-w-0 h-11 bg-secondary text-white rounded-xl px-5 py-2.5 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm transition"
-              >
-                {changingStatus ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Save size={16} />
-                )}
-                Update Status
-              </button>
-            </div>
+              {availableStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {getShipmentStatusLabel(status)}
+                </option>
+              ))}
+            </select>
           </div>
-        </SectionCard>
-      )}
+
+          {/* LOCATION */}
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Location
+            </label>
+
+            <select
+              value={statusForm.location}
+              onChange={(e) =>
+                setStatusForm((prev) => ({
+                  ...prev,
+                  location: e.target.value,
+                }))
+              }
+              disabled={loadingLocations}
+              className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+            >
+              <option value="">
+                {loadingLocations ? "Loading locations..." : "Select location"}
+              </option>
+
+              {locations.map((location) => (
+                <option key={location.id} value={location.name}>
+                  {location.name} ({location.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* NOTE */}
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">Note</label>
+
+            <input
+              value={statusForm.note}
+              onChange={(e) =>
+                setStatusForm((prev) => ({
+                  ...prev,
+                  note: e.target.value,
+                }))
+              }
+              placeholder="Shipment arrived"
+              className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+            />
+          </div>
+
+          {/* UPDATE */}
+
+          <div className="flex items-end">
+            <button
+              onClick={handleStatusChange}
+              disabled={
+                changingStatus ||
+                !statusForm.status ||
+                availableStatusOptions.length === 0
+              }
+              className="w-full min-w-0 h-11 bg-secondary text-white rounded-xl px-5 py-2.5 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm transition"
+            >
+              {changingStatus ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Save size={16} />
+              )}
+              Update Status
+            </button>
+          </div>
+        </div>
+      </SectionCard>
 
       {/* ======================================================
           EDIT FORM
@@ -854,11 +1171,12 @@ const ShipmentDetails = () => {
       {editing && canEdit && (
         <SectionCard
           title="Edit Shipment"
-          subtitle="Update shipment information."
+          subtitle="Update shipment information while it is still operationally editable."
           action={
             <button
               onClick={() => {
                 setEditing(false);
+
                 populateForms(shipment);
               }}
               className="text-gray-400 hover:text-gray-700 transition"
@@ -868,13 +1186,15 @@ const ShipmentDetails = () => {
           }
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 lg:gap-6 min-w-0">
+            {/* MODE */}
+
             <div>
               <label className="text-sm font-medium text-gray-700">Mode</label>
 
               <select
-                value={editForm.mode}
-                onChange={(e) => handleEditChange("mode", e.target.value)}
-                className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
+                value={shipment.mode}
+                disabled
+                className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 bg-gray-50 text-gray-600 cursor-not-allowed"
               >
                 {MODE_OPTIONS.map((mode) => (
                   <option key={mode} value={mode}>
@@ -882,33 +1202,67 @@ const ShipmentDetails = () => {
                   </option>
                 ))}
               </select>
+
+              <p className="text-xs text-gray-400 mt-1.5">
+                Shipment mode is fixed after creation.
+              </p>
             </div>
+
+            {/* ORIGIN */}
 
             <div>
               <label className="text-sm font-medium text-gray-700">
                 Origin
               </label>
 
-              <input
-                value={editForm.origin}
-                onChange={(e) => handleEditChange("origin", e.target.value)}
+              <select
+                value={editForm.originId}
+                onChange={(e) => handleEditChange("originId", e.target.value)}
+                disabled={loadingLocations}
                 className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
-              />
+              >
+                <option value="">
+                  {loadingLocations ? "Loading locations..." : "Select origin"}
+                </option>
+
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name} ({location.code})
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {/* DESTINATION */}
 
             <div>
               <label className="text-sm font-medium text-gray-700">
                 Destination
               </label>
 
-              <input
-                value={editForm.destination}
+              <select
+                value={editForm.destinationId}
                 onChange={(e) =>
-                  handleEditChange("destination", e.target.value)
+                  handleEditChange("destinationId", e.target.value)
                 }
+                disabled={loadingLocations}
                 className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
-              />
+              >
+                <option value="">
+                  {loadingLocations
+                    ? "Loading locations..."
+                    : "Select destination"}
+                </option>
+
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name} ({location.code})
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {/* ACTUAL WEIGHT */}
 
             <div>
               <label className="text-sm font-medium text-gray-700">
@@ -926,9 +1280,12 @@ const ShipmentDetails = () => {
                 className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
               />
             </div>
+
+            {/* DIMENSIONS */}
+
             <div className="sm:col-span-2 xl:col-span-3">
               <label className="text-sm font-medium text-gray-700">
-                Dimensions (L × W × H in cm) — Volumetric Weight
+                Dimensions (L × W × H in cm)
               </label>
 
               <div className="grid grid-cols-3 gap-3 mt-1.5">
@@ -966,7 +1323,7 @@ const ShipmentDetails = () => {
               <p className="mt-2 text-xs text-gray-500">
                 {calculatedVolumetricWeight > 0 ? (
                   <>
-                    New calculated volumetric weight:{" "}
+                    Calculated volumetric weight:{" "}
                     <span className="font-semibold text-gray-700">
                       {calculatedVolumetricWeight.toFixed(2)} KG
                     </span>
@@ -976,12 +1333,13 @@ const ShipmentDetails = () => {
                     Current volumetric weight:{" "}
                     <span className="font-semibold text-gray-700">
                       {Number(shipment.volumetricWeightKg || 0).toFixed(2)} KG
-                    </span>{" "}
-                    (leave dimensions empty to keep unchanged)
+                    </span>
                   </>
                 )}
               </p>
             </div>
+
+            {/* RETAIL RATE */}
 
             <div>
               <label className="text-sm font-medium text-gray-700">
@@ -1000,6 +1358,8 @@ const ShipmentDetails = () => {
               />
             </div>
 
+            {/* DISCOUNT */}
+
             <div>
               <label className="text-sm font-medium text-gray-700">
                 Discount
@@ -1014,6 +1374,8 @@ const ShipmentDetails = () => {
                 className="w-full min-w-0 h-11 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm mt-1.5 outline-none focus:ring-2 focus:ring-secondary/30 transition bg-white"
               />
             </div>
+
+            {/* ADDITIONAL FEES */}
 
             <div>
               <label className="text-sm font-medium text-gray-700">
@@ -1033,10 +1395,13 @@ const ShipmentDetails = () => {
             </div>
           </div>
 
+          {/* EDIT ACTIONS */}
+
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 sm:gap-3 mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-gray-100">
             <button
               onClick={() => {
                 setEditing(false);
+
                 populateForms(shipment);
               }}
               className="w-full sm:w-auto border border-gray-200 rounded-xl px-5 py-2.5 text-sm font-medium hover:bg-gray-50 transition inline-flex items-center justify-center"
@@ -1046,12 +1411,14 @@ const ShipmentDetails = () => {
 
             <button
               onClick={handleUpdate}
-              disabled={saving}
+              disabled={saving || loadingLocations}
               className="w-full sm:w-auto bg-secondary text-white rounded-xl px-5 py-2.5 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm transition"
             >
               {saving && <Loader2 size={16} className="animate-spin" />}
+
               <Save size={16} />
-              Save Changes
+
+              {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </SectionCard>
@@ -1062,33 +1429,116 @@ const ShipmentDetails = () => {
       ====================================================== */}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-6 items-start min-w-0">
-        {/* LEFT */}
+        {/* ====================================================
+            LEFT
+        ==================================================== */}
+
         <div className="xl:col-span-2 space-y-5 sm:space-y-6 min-w-0">
+          {/* PACKAGES */}
+
+          <SectionCard
+            title="Packages"
+            subtitle="View, add, edit and print labels for packages in this shipment."
+            action={
+              <button
+                type="button"
+                onClick={() => setPackagesModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90 transition"
+              >
+                <PackageIcon size={16} />
+                Manage Packages
+              </button>
+            }
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 shrink-0">
+                <PackageIcon size={22} className="text-gray-600" />
+              </div>
+
+              <div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {shipment.packages?.length || 0}
+                </p>
+
+                <p className="text-sm text-gray-500">
+                  {shipment.packages?.length === 1 ? "Package" : "Packages"} in
+                  this shipment
+                </p>
+              </div>
+            </div>
+
+            {/* PACKAGE STATUS SUMMARY */}
+
+            {shipment.packages && shipment.packages.length > 0 && (
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <div className="flex flex-wrap gap-2">
+                  {Array.from(
+                    new Set(
+                      shipment.packages
+                        .map((pkg) => pkg.status)
+                        .filter(Boolean),
+                    ),
+                  ).map((status) => {
+                    const count =
+                      shipment.packages?.filter((pkg) => pkg.status === status)
+                        .length || 0;
+
+                    return (
+                      <span
+                        key={status}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getShipmentStatusClass(
+                          status!,
+                        )}`}
+                      >
+                        {getShipmentStatusLabel(status!)}
+
+                        <span>{count}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </SectionCard>
+          {/* SHIPMENT INFORMATION */}
+
           <SectionCard title="Shipment Information">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6 min-w-0">
               <Info label="Tracking Number" value={shipment.trackingNumber} />
+
               <Info label="Mode" value={shipment.mode} />
+
               <Info label="Origin" value={shipment.origin} />
+
               <Info label="Destination" value={shipment.destination} />
+
               <Info
                 label="Actual Weight"
                 value={`${Number(shipment.actualWeightKg || 0).toFixed(2)} KG`}
               />
+
               <Info
                 label="Volumetric Weight"
                 value={`${Number(shipment.volumetricWeightKg || 0).toFixed(
                   2,
                 )} KG`}
               />
+
               <Info
                 label="Chargeable Weight"
                 value={`${Number(shipment.chargeableWeightKg || 0).toFixed(
                   2,
                 )} KG`}
               />
-              <Info label="Status" value={displayStatus(shipment.status)} />
+
+              <Info
+                label="Status"
+                value={getShipmentStatusLabel(shipment.status)}
+              />
             </div>
           </SectionCard>
+
+          {/* CUSTOMER */}
 
           <SectionCard
             title="Customer"
@@ -1100,21 +1550,19 @@ const ShipmentDetails = () => {
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6 min-w-0">
               <Info label="Name" value={customerName} />
+
               <Info label="Phone" value={shipment.customer?.phone || "—"} />
+
               <Info
                 label="WhatsApp"
                 value={shipment.customer?.whatsapp || "—"}
               />
+
               <Info label="Email" value={shipment.customer?.email || "—"} />
             </div>
           </SectionCard>
 
-          <ShipmentPackages
-            shipmentId={shipment.id}
-            partnerId={partnerId}
-            shipmentStatus={shipment.status}
-            onPackagesChanged={fetchShipment}
-          />
+          {/* STATUS HISTORY */}
 
           <SectionCard title="Status History">
             <div className="space-y-0">
@@ -1134,11 +1582,11 @@ const ShipmentDetails = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
                       <span
-                        className={`inline-flex w-fit px-2.5 py-1 rounded-full text-xs font-medium ${statusClass(
+                        className={`inline-flex w-fit px-2.5 py-1 rounded-full text-xs font-medium ${getShipmentStatusClass(
                           history.status,
                         )}`}
                       >
-                        {displayStatus(history.status)}
+                        {getShipmentStatusLabel(history.status)}
                       </span>
 
                       <span className="text-xs text-gray-400">
@@ -1148,13 +1596,14 @@ const ShipmentDetails = () => {
 
                     {history.location && (
                       <p className="text-sm text-gray-500 mt-2.5 flex items-center gap-1.5">
-                        <MapPin size={13} className="text-gray-400" />
-                        {history.location}
+                        <MapPin size={13} className="text-gray-400 shrink-0" />
+
+                        <span className="break-words">{history.location}</span>
                       </p>
                     )}
 
                     {history.note && (
-                      <p className="text-sm text-gray-500 mt-1.5">
+                      <p className="text-sm text-gray-500 mt-1.5 break-words">
                         {history.note}
                       </p>
                     )}
@@ -1171,21 +1620,12 @@ const ShipmentDetails = () => {
           </SectionCard>
         </div>
 
-        {/* RIGHT */}
+        {/* ====================================================
+            RIGHT
+        ==================================================== */}
+
         <div className="space-y-5 sm:space-y-6 min-w-0">
-          <SectionCard title="Partner">
-            <div className="space-y-5">
-              <Info
-                label="Company"
-                value={shipment.partner?.companyName || "—"}
-              />
-              <Info
-                label="Tracking Prefix"
-                value={shipment.partner?.trackingPrefix || "—"}
-              />
-              <Info label="Partner ID" value={shipment.partner?.id || "—"} />
-            </div>
-          </SectionCard>
+          {/* PRICING */}
 
           <SectionCard title="Pricing">
             <div className="divide-y divide-gray-100">
@@ -1193,13 +1633,18 @@ const ShipmentDetails = () => {
                 label="Wholesale Rate / KG"
                 value={shipment.wholesaleRatePerKg}
               />
+
               <Price
                 label="Retail Rate / KG"
                 value={shipment.retailRatePerKg}
               />
+
               <Price label="Partner Cost" value={shipment.partnerCost} />
+
               <Price label="Customer Price" value={shipment.customerPrice} />
+
               <Price label="Discount" value={shipment.discount} />
+
               <Price label="Additional Fees" value={shipment.additionalFees} />
             </div>
 
@@ -1212,11 +1657,13 @@ const ShipmentDetails = () => {
             </div>
           </SectionCard>
 
+          {/* PAYMENT */}
+
           <SectionCard
             title="Payment"
             action={
               <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
-                <PackageIcon size={18} className="text-gray-400" />
+                <DollarSign size={18} className="text-gray-400" />
               </div>
             }
           >
@@ -1237,20 +1684,220 @@ const ShipmentDetails = () => {
             </div>
           </SectionCard>
 
-          <SectionCard title="Information">
-            <div className="space-y-5">
-              <Info label="Shipment ID" value={shipment.id} />
-              <Info label="Created At" value={formatDate(shipment.createdAt)} />
-              {shipment.updatedAt && (
-                <Info
-                  label="Last Updated"
-                  value={formatDate(shipment.updatedAt)}
-                />
-              )}
+          {/* CARRIER INFORMATION */}
+
+          <div className="rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 shrink-0">
+                  <Truck className="h-5 w-5" />
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    Carrier Information
+                  </h3>
+
+                  <p className="text-sm text-gray-500">
+                    External carrier and waybill details
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCarrierForm((prev) => !prev);
+
+                  if (!showCarrierForm) {
+                    fetchCarriers();
+                  }
+                }}
+                className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50 transition"
+              >
+                {shipment.carrier ? "Change Carrier" : "Assign Carrier"}
+              </button>
             </div>
-          </SectionCard>
+
+            {/* CURRENT CARRIER */}
+
+            {shipment.carrier ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-xl bg-gray-50 p-4">
+                  <p className="text-xs font-medium uppercase text-gray-500">
+                    Carrier
+                  </p>
+
+                  <p className="mt-1 font-semibold text-gray-900">
+                    {shipment.carrier.name}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    {shipment.carrier.code}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-gray-50 p-4">
+                  <p className="text-xs font-medium uppercase text-gray-500">
+                    Waybill / AWB
+                  </p>
+
+                  <p className="mt-1 font-semibold text-gray-900 break-all">
+                    {shipment.waybillNumber || "Not assigned"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed p-6 text-center">
+                <Truck className="mx-auto h-8 w-8 text-gray-400" />
+
+                <p className="mt-2 text-sm font-medium text-gray-700">
+                  No carrier assigned
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Assign a carrier and waybill to this shipment.
+                </p>
+              </div>
+            )}
+
+            {/* ATTACH / CHANGE FORM */}
+
+            {showCarrierForm && (
+              <div className="mt-5 border-t pt-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* CARRIER */}
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Carrier
+                    </label>
+
+                    <select
+                      value={selectedCarrierId}
+                      onChange={(e) => setSelectedCarrierId(e.target.value)}
+                      disabled={carrierLoading || carrierSaving}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30 bg-white"
+                    >
+                      <option value="">
+                        {carrierLoading
+                          ? "Loading carriers..."
+                          : "Select carrier"}
+                      </option>
+
+                      {carriers.map((carrier) => (
+                        <option key={carrier.id} value={carrier.id}>
+                          {carrier.name} ({carrier.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* WAYBILL */}
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Waybill / AWB Number
+                    </label>
+
+                    <input
+                      type="text"
+                      value={waybillNumber}
+                      onChange={(e) => setWaybillNumber(e.target.value)}
+                      disabled={carrierSaving}
+                      placeholder="Enter carrier waybill number"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30"
+                    />
+                  </div>
+                </div>
+
+                {/* CARRIER ACTIONS */}
+
+                <div className="mt-4 flex flex-col sm:flex-row justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCarrierForm(false)}
+                    disabled={carrierSaving}
+                    className="rounded-xl border px-4 py-2.5 text-sm font-medium hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleAttachCarrier}
+                    disabled={carrierSaving || !selectedCarrierId}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {carrierSaving && (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    )}
+
+                    {carrierSaving
+                      ? "Saving..."
+                      : shipment.carrier
+                        ? "Update Carrier"
+                        : "Assign Carrier"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ======================================================
+          PACKAGES MODAL
+      ====================================================== */}
+
+      {packagesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+          {/* BACKDROP */}
+
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+            onClick={() => setPackagesModalOpen(false)}
+          />
+
+          {/* MODAL */}
+
+          <div className="relative flex w-full max-w-5xl max-h-[92vh] sm:max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            {/* MODAL HEADER */}
+
+            <div className="flex items-center justify-between gap-4 border-b border-gray-200 px-4 sm:px-6 py-4 shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Shipment Packages
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-0.5 break-all">
+                  {shipment.trackingNumber}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPackagesModalOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100 shrink-0"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* MODAL BODY */}
+
+            <div className="overflow-y-auto overflow-x-hidden p-3 sm:p-6">
+              <ShipmentPackages
+                shipmentId={shipment.id}
+                partnerId={partnerId}
+                shipmentStatus={shipment.status}
+                trackingNumber={shipment.trackingNumber}
+                onPackagesChanged={fetchShipment}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

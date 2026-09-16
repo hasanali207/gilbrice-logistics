@@ -176,7 +176,7 @@ const PackageScanner = () => {
         : "";
 
   // route-এ থাকলে সেটা priority পাবে, নাহলে Redux state-এর partnerId
-  const partnerId = routePartnerId || user?.partnerId || "";
+  const partnerId = routePartnerId || user?.partnerId || null;
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -223,27 +223,21 @@ const PackageScanner = () => {
     data: PackageData,
     nextStatus: string,
   ): Promise<boolean> => {
-    if (!partnerId) {
-      toast.error("Partner information is missing");
-      return false;
-    }
-
     try {
       setScanning(true);
 
       const res = await api.post("/api/v1/packagescan", {
         packageCode: data.packageCode,
         status: nextStatus,
-
         ...(location.trim() && {
           location: location.trim(),
         }),
-
         ...(notes.trim() && {
           notes: notes.trim(),
         }),
-
-        partnerId,
+        ...(partnerId && {
+          partnerId,
+        }),
       });
 
       const result = res.data.data;
@@ -309,10 +303,12 @@ const PackageScanner = () => {
        *
        * GET /api/v1/packagescan/code/:packageCode
        */
+      const query = partnerId
+        ? `?partnerId=${encodeURIComponent(partnerId)}`
+        : "";
+
       const res = await api.get(
-        `/api/v1/packagescan/code/${encodeURIComponent(code)}?partnerId=${encodeURIComponent(
-          partnerId,
-        )}`,
+        `/api/v1/packagescan/code/${encodeURIComponent(code)}${query}`,
       );
 
       const data: PackageData = res.data.data;

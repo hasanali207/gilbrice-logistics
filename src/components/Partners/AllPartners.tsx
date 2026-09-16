@@ -5,15 +5,18 @@ import { Input } from "@/components/ui/input";
 import api from "@/lib/axios";
 import { getDashboardPath } from "@/lib/route";
 import { RootState } from "@/Redux/store";
+import { getPagination } from "@/utils/getPageNumber";
 import {
+  ArrowLeft,
+  ArrowRight,
   BookOpen,
   CreditCard,
   DollarSign,
+  History,
   Plus,
   Scan,
   Ship,
   SquarePen,
-  Truck,
   Users,
   X,
 } from "lucide-react";
@@ -22,6 +25,7 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
 import Swal from "sweetalert2";
+import ActionDropdown from "../ui/ActionDropdown";
 
 /* ================= TYPES ================= */
 interface IPartner {
@@ -60,7 +64,6 @@ const emptyEditForm = {
 /* ================= MAIN COMPONENT ================= */
 const AllPartners = forwardRef((props, ref) => {
   const [partners, setPartners] = useState<IPartner[]>([]);
-  const [filteredPartners, setFilteredPartners] = useState<IPartner[]>([]);
   const [loading, setLoading] = useState(false);
 
   /* filters */
@@ -72,7 +75,7 @@ const AllPartners = forwardRef((props, ref) => {
 
   /* pagination */
   const [page, setPage] = useState(1);
-  const limit = 10;
+  const [limit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
   /* edit modal */
@@ -84,18 +87,38 @@ const AllPartners = forwardRef((props, ref) => {
 
   /* status toggle */
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
   const user = useSelector((state: RootState) => state.auth.user);
   const basePath = getDashboardPath(user?.role);
 
   /* ================= FETCH ================= */
   const fetchAllPartners = async () => {
     setLoading(true);
+
     try {
-      const res = await api.get("/api/v1/partner");
-      setPartners(res.data.data || []);
-      setFilteredPartners(res.data.data || []);
-      setTotalPages(Math.ceil((res.data.data?.length || 0) / limit));
-      setPage(1);
+      const params = new URLSearchParams();
+
+      params.set("page", String(page));
+      params.set("limit", String(limit));
+
+      if (searchTerm.trim()) {
+        params.set("searchTerm", searchTerm.trim());
+      }
+
+      if (prefixFilter.trim()) {
+        params.set("trackingPrefix", prefixFilter.trim());
+      }
+
+      if (statusFilter !== "ALL") {
+        params.set("isActive", statusFilter === "ACTIVE" ? "true" : "false");
+      }
+
+      const res = await api.get(`/api/v1/partner?${params.toString()}`);
+
+      const { data, meta } = res.data;
+
+      setPartners(data || []);
+      setTotalPages(meta?.total ? Math.ceil(meta.total / meta.limit) : 1);
     } catch (err) {
       console.error("Fetch all partners error:", err);
       toast.error("Failed to load partners");
@@ -110,34 +133,11 @@ const AllPartners = forwardRef((props, ref) => {
 
   useEffect(() => {
     fetchAllPartners();
-  }, []);
-
-  /* FILTER */
-  useEffect(() => {
-    const filtered = partners.filter((p) => {
-      const matchName = searchTerm
-        ? p.companyName.toLowerCase().includes(searchTerm.toLowerCase())
-        : true;
-      const matchPrefix = prefixFilter
-        ? p.trackingPrefix.toLowerCase() === prefixFilter.toLowerCase()
-        : true;
-      const matchStatus =
-        statusFilter === "ALL"
-          ? true
-          : statusFilter === "ACTIVE"
-            ? p.isActive
-            : !p.isActive;
-      return matchName && matchPrefix && matchStatus;
-    });
-    setFilteredPartners(filtered);
-    setTotalPages(Math.ceil(filtered.length / limit));
-    setPage(1);
-  }, [searchTerm, prefixFilter, statusFilter, partners]);
-
-  const paginatedPartners = filteredPartners.slice(
-    (page - 1) * limit,
-    page * limit,
-  );
+  }, [page, searchTerm, prefixFilter, statusFilter]);
+  const changePage = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
+  };
 
   /* ================= EDIT ================= */
   const handleEdit = (partner: IPartner) => {
@@ -218,7 +218,6 @@ const AllPartners = forwardRef((props, ref) => {
 
     setTogglingId(partner.id);
     try {
-      // NOTE: adjust this path if your router mounts status changes differently.
       await api.patch(`/api/v1/partner/${partner.id}/status`, {
         isActive: !partner.isActive,
       });
@@ -233,6 +232,46 @@ const AllPartners = forwardRef((props, ref) => {
     }
   };
 
+  /* action items shown inside the dropdown (Edit stays outside) */
+  const getMenuActions = (p: IPartner) => [
+    {
+      href: `${basePath}/partners/${p.id}/rates`,
+      label: "Wholesale Rates",
+      icon: Ship,
+    },
+    {
+      href: `${basePath}/partners/${p.id}/ledger`,
+      label: "Ledger",
+      icon: BookOpen,
+    },
+    {
+      href: `${basePath}/partners/${p.id}/employees`,
+      label: "Employees",
+      icon: Users,
+    },
+    {
+      href: `${basePath}/partners/${p.id}/scanner`,
+      label: "Scanner",
+      icon: Scan,
+    },
+    {
+      href: `${basePath}/partners/${p.id}/scanhistory`,
+      label: "Scan History",
+      icon: History,
+    },
+    {
+      href: `${basePath}/partners/${p.id}/settlement`,
+      label: "Settlement",
+      icon: DollarSign,
+    },
+    {
+      href: `${basePath}/partners/${p.id}/ledger`,
+      label: "Credit / Ledger",
+      icon: CreditCard,
+    },
+  ];
+
+  const pages = getPagination(page, totalPages);
   /* ================= UI ================= */
   return (
     <div className="max-w-7xl mx-auto py-10 px-4">
@@ -246,7 +285,7 @@ const AllPartners = forwardRef((props, ref) => {
       </div>
 
       {/* FILTERS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 bg-white p-5 rounded-xl shadow">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
         <Input
           placeholder="Search Company Name"
           value={searchTerm}
@@ -258,7 +297,7 @@ const AllPartners = forwardRef((props, ref) => {
           onChange={(e) => setPrefixFilter(e.target.value)}
         />
         <select
-          className="w-full border rounded px-3 py-2 text-sm"
+          className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white"
           value={statusFilter}
           onChange={(e) =>
             setStatusFilter(e.target.value as "ALL" | "ACTIVE" | "INACTIVE")
@@ -272,10 +311,11 @@ const AllPartners = forwardRef((props, ref) => {
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full border text-sm min-w-[900px]">
+        <table className="w-full border text-sm min-w-[800px]">
           <thead className="bg-secondary text-white">
-            <tr>
+            <tr className="border border-slate-600">
               {[
+                "SL",
                 "Company",
                 "Slug",
                 "Prefix",
@@ -285,7 +325,10 @@ const AllPartners = forwardRef((props, ref) => {
                 "Rates",
                 "Action",
               ].map((h) => (
-                <th key={h} className="border p-2">
+                <th
+                  key={h}
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-100 border border-slate-600"
+                >
                   {h}
                 </th>
               ))}
@@ -294,29 +337,48 @@ const AllPartners = forwardRef((props, ref) => {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={8} className="text-center py-4">
+                <td
+                  colSpan={9}
+                  className="text-center py-6 text-gray-500 border border-gray-200"
+                >
                   Loading...
                 </td>
               </tr>
             )}
             {!loading &&
-              paginatedPartners.map((p) => (
-                <tr key={p.id} className="odd:bg-gray-50 hover:bg-blue-50">
-                  <td className="border p-2 font-medium">{p.companyName}</td>
-                  <td className="border p-2 font-mono text-xs">{p.slug}</td>
-                  <td className="border p-2 font-mono text-xs">
+              partners.map((p, idx) => (
+                <tr
+                  key={p.id}
+                  className={`${
+                    idx % 2 === 0 ? "bg-white" : "bg-blue-50"
+                  } hover:bg-blue-100/70 transition-colors`}
+                >
+                  <td className="px-4 py-3 font-medium text-gray-800 border border-gray-200">
+                    {idx + 1 + (page - 1) * limit}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-800 border border-gray-200">
+                    {p.companyName}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600 border border-gray-200">
+                    {p.slug}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600 border border-gray-200">
                     {p.trackingPrefix}
                   </td>
-                  <td className="border p-2">{p.phone || "-"}</td>
-                  <td className="border p-2">{p.email || "-"}</td>
-                  <td className="border p-2">
+                  <td className="px-4 py-3 text-gray-600 border border-gray-200">
+                    {p.phone || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 border border-gray-200">
+                    {p.email || "-"}
+                  </td>
+                  <td className="px-4 py-3 border border-gray-200">
                     <button
                       onClick={() => handleToggleStatus(p)}
                       disabled={togglingId === p.id}
-                      className={`px-2 py-1 rounded text-xs font-medium cursor-pointer disabled:opacity-50 ${
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium border cursor-pointer disabled:opacity-50 transition-colors ${
                         p.isActive
-                          ? "bg-green-100 text-green-700 hover:bg-green-200"
-                          : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                          : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
                       }`}
                     >
                       {togglingId === p.id
@@ -326,12 +388,12 @@ const AllPartners = forwardRef((props, ref) => {
                           : "Inactive"}
                     </button>
                   </td>
-                  <td className="border p-2">
+                  <td className="px-4 py-3 text-gray-600 border border-gray-200">
                     {p._count?.wholesaleRates
                       ? `${p._count.wholesaleRates} rate(s)`
                       : "-"}
                   </td>
-                  <td className="border p-2">
+                  <td className="px-4 py-3 border border-gray-200">
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
@@ -339,70 +401,79 @@ const AllPartners = forwardRef((props, ref) => {
                         title="Edit partner"
                         onClick={() => handleEdit(p)}
                       >
-                        <SquarePen size={14} />
+                        <SquarePen size={14} className="mr-1" />
+                        Edit
                       </Button>
-                      <Link href={`${basePath}/partners/${p.id}/rates`}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          title="Wholesale rates"
-                        >
-                          <Ship size={14} />
-                        </Button>
-                      </Link>
-                      <Link href={`${basePath}/partners/${p.id}/ledger`}>
-                        <Button size="sm" variant="outline" title="Ledger">
-                          <BookOpen size={14} />
-                        </Button>
-                      </Link>
-                      <Link href={`${basePath}/partners/${p.id}/employees`}>
-                        <Button size="sm" variant="outline" title="Employees">
-                          <Users size={14} />
-                        </Button>
-                      </Link>
-                      <Link href={`${basePath}/partners/${p.id}/shipments`}>
-                        <Button size="sm" variant="outline" title="Shipments">
-                          <Truck size={14} />
-                        </Button>
-                      </Link>
-                      <Link href={`${basePath}/partners/${p.id}/scanner`}>
-                        <Button size="sm" variant="outline" title="Scanner">
-                          <Scan size={14} />
-                        </Button>
-                      </Link>
-                      <Link href={`${basePath}/partners/${p.id}/settlement`}>
-                        <Button size="sm" variant="outline" title="Settlement">
-                          <DollarSign size={14} />
-                        </Button>
-                      </Link>
-                      <Link href={`${basePath}/partners/${p.id}/ledger`}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          title="Credit / Ledger"
-                        >
-                          <CreditCard size={14} />
-                        </Button>
-                      </Link>
+
+                      {/* kebab / hamburger menu for the rest */}
+                      <ActionDropdown items={getMenuActions(p)} />
                     </div>
                   </td>
                 </tr>
               ))}
-            {!loading && paginatedPartners.length === 0 && (
+            {!loading && partners.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-4">
+                <td
+                  colSpan={9}
+                  className="text-center py-6 text-gray-500 border border-gray-200"
+                >
                   No partners found
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-10">
+            <button
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              disabled={page === 1}
+              className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+            >
+              <ArrowLeft /> Prev
+            </button>
+
+            <div className="flex items-center gap-1">
+              {pages.map((item: any, index: any) =>
+                item === "..." ? (
+                  <span
+                    key={`dots-${index}`}
+                    className="w-9 h-9 flex items-center justify-center text-gray-500"
+                  >
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    onClick={() => changePage(item as number)}
+                    className={`w-9 h-9 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                      page === item
+                        ? "bg-green-600 text-white shadow-sm"
+                        : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ),
+              )}
+            </div>
+
+            <button
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              disabled={page === totalPages}
+              className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+            >
+              Next <ArrowRight />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* EDIT MODAL */}
       {editOpen && selectedPartner && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
+          <div className="bg-white p-6 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative shadow-2xl">
             <button
               onClick={cancelEdit}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 cursor-pointer"

@@ -13,10 +13,20 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+// NOTE: assumption — generatePackageLabelPdf() returns a pdf-lib
+// PDFDocument (based on how `pdfDoc` is passed straight into
+// PrintLabelModal). If that's wrong, share packageLabelPdf.ts and
+// Printlabelmodal.tsx so the merge logic below can be corrected.
+import { PDFDocument } from "pdf-lib";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Button } from "../ui/button";
-import { packageLabelPdf } from "./packageLabelPdf";
+import {
+  generatePackageLabelPdf,
+  getPackageLabelPdfBlob,
+} from "./packageLabelPdf";
+import PrintLabelModal from "./Printlabelmodal";
+
 interface Shipment {
   id: string;
   trackingNumber: string;
@@ -56,6 +66,7 @@ interface ShipmentPackagesProps {
   shipmentId: string;
   partnerId?: string;
   shipmentStatus?: string;
+  trackingNumber?: string;
   onPackagesChanged?: () => void;
 }
 
@@ -79,10 +90,13 @@ const ShipmentPackages = ({
   shipmentId,
   partnerId,
   shipmentStatus,
+  trackingNumber,
   onPackagesChanged,
 }: ShipmentPackagesProps) => {
   const [packages, setPackages] = useState<PackageData[]>([]);
-
+  const [labelPreviewImage, setLabelPreviewImage] = useState<string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
 
   const [saving, setSaving] = useState(false);
@@ -99,6 +113,22 @@ const ShipmentPackages = ({
 
   const [form, setForm] = useState<PackageForm>(EMPTY_FORM);
   const [printingId, setPrintingId] = useState<string | null>(null);
+
+  // ============================================================
+  // PRINT ALL LABELS
+  // ============================================================
+
+  const [printingAll, setPrintingAll] = useState(false);
+
+  // ============================================================
+  // PRINT / SHARE MODAL
+  // ============================================================
+
+  const [labelModalOpen, setLabelModalOpen] = useState(false);
+  const [labelPdfDoc, setLabelPdfDoc] = useState<any>(null);
+  const [labelFileName, setLabelFileName] = useState("");
+  const [labelShareText, setLabelShareText] = useState("");
+
   // ============================================================
   // LOCKED SHIPMENT
   // ============================================================
@@ -384,6 +414,12 @@ const ShipmentPackages = ({
     );
   }
 
+  // ============================================================
+  // PRINT LABEL — generates the PDF, then opens the action modal
+  // (Print / Download / Share via WhatsApp) instead of printing
+  // automatically.
+  // ============================================================
+
   const handlePrintLabel = async (packageId: string) => {
     try {
       setPrintingId(packageId);
@@ -401,10 +437,15 @@ const ShipmentPackages = ({
         return;
       }
 
-      // ✅ অন্য file-এর PDF function
-      await packageLabelPdf(labelData);
-
-      toast.success("Label ready for printing");
+      const pdfDoc = await generatePackageLabelPdf(labelData);
+      setLabelPdfDoc(pdfDoc);
+      setLabelFileName(
+        `${labelData.package?.packageCode || "package-label"}.pdf`,
+      );
+      setLabelShareText(
+        `Package: ${labelData.package?.packageCode || "—"}\nTracking: ${labelData.shipment?.trackingNumber || "—"}`,
+      );
+      setLabelModalOpen(true);
     } catch (error: any) {
       console.error(error);
 
@@ -415,6 +456,112 @@ const ShipmentPackages = ({
       setPrintingId(null);
     }
   };
+
+  // ============================================================
+  // PRINT ALL LABELS
+  //
+  // Fetches label data for every package in this shipment,
+  // generates each package's label PDF individually (reusing the
+  // same generatePackageLabelPdf used for single-package print),
+  // then merges every generated PDF's pages into ONE combined
+  // PDFDocument using pdf-lib. The merged document is opened in
+  // the same Print/Download/Share modal used for a single label.
+  // ============================================================
+
+  const handlePrintAllLabels = async () => {
+    if (!packages.length) {
+      toast.error("No packages to print");
+      return;
+    }
+
+    try {
+      setPrintingAll(true);
+
+      const mergedPdf = await PDFDocument.create();
+      let mergedCount = 0;
+
+      for (const pkg of packages) {
+        const res = await api.get(
+          `/api/v1/package/${pkg.id}/label${
+            partnerId ? `?partnerId=${encodeURIComponent(partnerId)}` : ""
+          }`,
+        );
+
+        const labelData = res.data.data;
+        if (!labelData) {
+          console.warn(`Label data not found for package ${pkg.id}, skipping`);
+          continue;
+        }
+
+        // generatePackageLabelPdf() pdfMake ডকুমেন্ট রিটার্ন করে —
+        // pdf-lib দিয়ে merge করার জন্য আগে raw bytes-এ নামাতে হবে।
+        const singlePdfMakeDoc = await generatePackageLabelPdf(labelData);
+        const singleBlob = await getPackageLabelPdfBlob(singlePdfMakeDoc);
+        const singleBytes = await singleBlob.arrayBuffer();
+
+        const singlePdf = await PDFDocument.load(singleBytes);
+        const copiedPages = await mergedPdf.copyPages(
+          singlePdf,
+          singlePdf.getPageIndices(),
+        );
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+
+        mergedCount += 1;
+      }
+
+      if (mergedCount === 0) {
+        toast.error("Could not generate any package labels");
+        return;
+      }
+
+      const mergedBytes = await mergedPdf.save();
+
+      const buffer = new ArrayBuffer(mergedBytes.byteLength);
+      new Uint8Array(buffer).set(mergedBytes);
+
+      const mergedBlob = new Blob([buffer], {
+        type: "application/pdf",
+      });
+
+      // PrintLabelModal শুধু .getBlob(cb) আর .download(filename)
+      // মেথড দুটোই কল করে — তাই merged pdf-lib bytes-কে ঠিক ওই
+      // দুটো মেথড-সহ pdfMake-স্টাইলের object হিসেবে wrap করে দিলেই
+      // মডাল অপরিবর্তিত রেখে print/download/share সব কাজ করবে।
+      const mergedPdfMakeStyleDoc = {
+        getBlob: (cb: (blob: Blob) => void) => cb(mergedBlob),
+        download: (filename?: string) => {
+          const url = URL.createObjectURL(mergedBlob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename || "all-package-labels.pdf";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        },
+      };
+
+      setLabelPdfDoc(mergedPdfMakeStyleDoc);
+      setLabelFileName(
+        `${trackingNumber || "shipment"}-all-package-labels.pdf`,
+      );
+      setLabelShareText(
+        `All package labels for shipment ${trackingNumber || "—"} (${mergedCount} package${
+          mergedCount > 1 ? "s" : ""
+        })`,
+      );
+
+      setLabelModalOpen(true);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(
+        error?.response?.data?.message || "Failed to generate all labels",
+      );
+    } finally {
+      setPrintingAll(false);
+    }
+  };
+
   // ============================================================
   // UI
   // ============================================================
@@ -446,27 +593,60 @@ const ShipmentPackages = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={openCreate}
-              disabled={isLocked}
-              className="
-                inline-flex items-center justify-center gap-2
-                px-4 py-2.5
-                rounded-xl
-                bg-secondary
-                text-white
-                text-sm font-medium
-                shadow-sm
-                hover:opacity-90
-                transition
-                disabled:opacity-50
-                disabled:cursor-not-allowed
-              "
-            >
-              <PackagePlus size={17} />
-              Add Package
-            </button>
+            <div className="flex items-center gap-2.5">
+              {/* PRINT ALL LABELS */}
+
+              <button
+                type="button"
+                onClick={handlePrintAllLabels}
+                disabled={printingAll || packages.length === 0}
+                className="
+                  inline-flex items-center justify-center gap-2
+                  px-4 py-2.5
+                  rounded-xl
+                  border border-gray-200
+                  bg-white
+                  text-gray-700
+                  text-sm font-medium
+                  shadow-sm
+                  hover:bg-gray-50
+                  transition
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                "
+              >
+                {printingAll ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Printer size={16} />
+                )}
+                {printingAll ? "Preparing..." : "Print All Labels"}
+              </button>
+
+              {/* ADD PACKAGE */}
+
+              <button
+                type="button"
+                onClick={openCreate}
+                disabled={isLocked}
+                className="
+                  inline-flex items-center justify-center gap-2
+                  px-4 py-2.5
+                  rounded-xl
+                  bg-secondary
+                  text-white
+                  text-sm font-medium
+                  shadow-sm
+                  hover:opacity-90
+                  transition
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                "
+              >
+                <PackagePlus size={17} />
+                Add Package
+              </button>
+            </div>
           </div>
         </div>
 
@@ -967,6 +1147,20 @@ const ShipmentPackages = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================
+          PRINT / DOWNLOAD / SHARE LABEL MODAL
+          (used for BOTH single-label print and "print all" — the
+          merged multi-page PDF just opens in the same viewer)
+      ======================================================== */}
+
+      <PrintLabelModal
+        open={labelModalOpen}
+        onClose={() => setLabelModalOpen(false)}
+        pdfDoc={labelPdfDoc}
+        fileName={labelFileName}
+        shareText={labelShareText}
+      />
     </>
   );
 };

@@ -21,6 +21,7 @@ interface IPartner {
   companyName: string;
   slug: string;
 }
+
 type UserType = "GILBRICE_STAFF" | "PARTNER_EMPLOYEE";
 
 interface IAuthUser {
@@ -29,11 +30,24 @@ interface IAuthUser {
   userType?: UserType;
   partnerId?: string | null;
 }
+
+interface ILocation {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  type: string;
+}
+
 interface IPartnerRate {
   id: string;
   partnerId: string;
   mode: ShipmentMode;
-  destination: string;
+
+  // NEW
+  destinationId: string;
+  destinationLocation?: ILocation;
+
   ratePerKg: number | string;
   minChargeableKg?: number | string | null;
   effectiveFrom: string;
@@ -43,7 +57,7 @@ interface IPartnerRate {
 
 interface RateForm {
   mode: ShipmentMode;
-  destination: string;
+  destinationId: string;
   ratePerKg: string;
   minChargeableKg: string;
   effectiveFrom: string;
@@ -56,7 +70,7 @@ interface RateForm {
 
 const emptyRateForm: RateForm = {
   mode: "AIR",
-  destination: "",
+  destinationId: "",
   ratePerKg: "",
   minChargeableKg: "",
   effectiveFrom: "",
@@ -91,13 +105,6 @@ const PartnerRatesPage = () => {
   const routePartnerId =
     typeof params.partnerId === "string" ? params.partnerId : undefined;
 
-  /*
-   * Staff:
-   * URL থেকে partnerId নেবে
-   *
-   * Partner Employee:
-   * নিজের logged-in partnerId নেবে
-   */
   const partnerId = useMemo(() => {
     if (isGilbriceStaff) {
       return routePartnerId;
@@ -118,13 +125,49 @@ const PartnerRatesPage = () => {
 
   const [rates, setRates] = useState<IPartnerRate[]>([]);
 
+  const [locations, setLocations] = useState<ILocation[]>([]);
+
   const [loading, setLoading] = useState(true);
+
+  const [loadingLocations, setLoadingLocations] = useState(false);
 
   const [adding, setAdding] = useState(false);
 
   const [form, setForm] = useState<RateForm>(emptyRateForm);
 
   const [error, setError] = useState<string | null>(null);
+
+  /* ==========================================================
+     LOAD LOCATIONS
+  ========================================================== */
+
+  const loadLocations = async () => {
+    try {
+      setLoadingLocations(true);
+
+      const res = await api.get("/api/v1/locations?isActive=true");
+
+      const data = res.data?.data;
+
+      const list: ILocation[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.result)
+            ? data.result
+            : [];
+
+      setLocations(list);
+    } catch (err: any) {
+      console.error("Failed to load locations:", err);
+
+      toast.error(err?.response?.data?.message || "Failed to load locations");
+
+      setLocations([]);
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
 
   /* ==========================================================
      LOAD PARTNER + RATES
@@ -140,10 +183,9 @@ const PartnerRatesPage = () => {
       setLoading(true);
       setError(null);
 
-      // Staff: partner info + rates দুটোই লাগবে
-      // Employee: partner info লাগবে না (শুধু rates দেখবে), কিন্তু
-      // চাইলে company name দেখানোর জন্য এখানে রাখা হলো — না চাইলে বাদ দিতে পারেন
-      const requests = [api.get(`/api/v1/partner/${partnerId}/rates`)];
+      const requests: Promise<any>[] = [
+        api.get(`/api/v1/partner/${partnerId}/rates`),
+      ];
 
       if (isGilbriceStaff) {
         requests.unshift(api.get(`/api/v1/partner/${partnerId}`));
@@ -153,11 +195,30 @@ const PartnerRatesPage = () => {
 
       if (isGilbriceStaff) {
         const [partnerRes, ratesRes] = results;
+
         setPartner(partnerRes.data?.data ?? null);
-        setRates(ratesRes.data?.data ?? []);
+
+        const ratesData = ratesRes.data?.data;
+
+        setRates(
+          Array.isArray(ratesData)
+            ? ratesData
+            : Array.isArray(ratesData?.data)
+              ? ratesData.data
+              : [],
+        );
       } else {
         const [ratesRes] = results;
-        setRates(ratesRes.data?.data ?? []);
+
+        const ratesData = ratesRes.data?.data;
+
+        setRates(
+          Array.isArray(ratesData)
+            ? ratesData
+            : Array.isArray(ratesData?.data)
+              ? ratesData.data
+              : [],
+        );
       }
     } catch (err: any) {
       console.error("Failed to load partner/rates:", err);
@@ -180,20 +241,25 @@ const PartnerRatesPage = () => {
   ========================================================== */
 
   useEffect(() => {
+    if (!user) return;
+
+    loadLocations();
+
     if (partnerId) {
       loadData();
-    } else if (user) {
+    } else {
       setLoading(false);
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partnerId, user]);
 
   /* ==========================================================
-     ADD RATE (STAFF ONLY)
+     ADD RATE — STAFF ONLY
   ========================================================== */
 
   const handleAddRate = async () => {
-    if (!isGilbriceStaff) return; // extra guard
+    if (!isGilbriceStaff) return;
 
     setError(null);
 
@@ -202,7 +268,7 @@ const PartnerRatesPage = () => {
       return;
     }
 
-    if (!form.destination.trim()) {
+    if (!form.destinationId) {
       setError("Destination is required");
       return;
     }
@@ -234,7 +300,7 @@ const PartnerRatesPage = () => {
     const payload = {
       mode: form.mode,
 
-      destination: form.destination.trim(),
+      destinationId: form.destinationId,
 
       ratePerKg: Number(form.ratePerKg),
 
@@ -302,7 +368,7 @@ const PartnerRatesPage = () => {
   return (
     <div className="max-w-5xl mx-auto py-10 px-4">
       {/* ======================================================
-          BACK BUTTON — শুধু staff এর জন্য (তারা partners list থেকে আসে)
+          BACK BUTTON
       ====================================================== */}
 
       {isGilbriceStaff && (
@@ -328,7 +394,7 @@ const PartnerRatesPage = () => {
       </h2>
 
       {/* ======================================================
-          PARTNER INFO — শুধু staff দেখবে
+          PARTNER INFO
       ====================================================== */}
 
       {isGilbriceStaff && !loading && partner && (
@@ -351,8 +417,7 @@ const PartnerRatesPage = () => {
       )}
 
       {/* ======================================================
-          ADD RATE FORM — শুধু GILBRICE_STAFF এর জন্য
-          (PARTNER_EMPLOYEE এই সেকশনই দেখবে না)
+          ADD RATE FORM
       ====================================================== */}
 
       {isGilbriceStaff && (
@@ -368,9 +433,7 @@ const PartnerRatesPage = () => {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* ==================================================
-                MODE
-            ================================================== */}
+            {/* MODE */}
 
             <div>
               <label className="text-sm text-gray-600 mb-1 block">Mode</label>
@@ -391,30 +454,39 @@ const PartnerRatesPage = () => {
               </select>
             </div>
 
-            {/* ==================================================
-                DESTINATION
-            ================================================== */}
+            {/* DESTINATION */}
 
             <div>
               <label className="text-sm text-gray-600 mb-1 block">
                 Destination
               </label>
 
-              <Input
-                value={form.destination}
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm bg-white"
+                value={form.destinationId}
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
-                    destination: e.target.value,
+                    destinationId: e.target.value,
                   }))
                 }
-                placeholder="Australia"
-              />
+                disabled={loadingLocations}
+              >
+                <option value="">
+                  {loadingLocations
+                    ? "Loading locations..."
+                    : "Select destination"}
+                </option>
+
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name} ({location.code}) — {location.country}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* ==================================================
-                RATE PER KG
-            ================================================== */}
+            {/* RATE PER KG */}
 
             <div>
               <label className="text-sm text-gray-600 mb-1 block">
@@ -436,9 +508,7 @@ const PartnerRatesPage = () => {
               />
             </div>
 
-            {/* ==================================================
-                MIN CHARGEABLE KG
-            ================================================== */}
+            {/* MIN CHARGEABLE KG */}
 
             <div>
               <label className="text-sm text-gray-600 mb-1 block">
@@ -460,9 +530,7 @@ const PartnerRatesPage = () => {
               />
             </div>
 
-            {/* ==================================================
-                EFFECTIVE FROM
-            ================================================== */}
+            {/* EFFECTIVE FROM */}
 
             <div>
               <label className="text-sm text-gray-600 mb-1 block">
@@ -481,9 +549,7 @@ const PartnerRatesPage = () => {
               />
             </div>
 
-            {/* ==================================================
-                EFFECTIVE TO
-            ================================================== */}
+            {/* EFFECTIVE TO */}
 
             <div>
               <label className="text-sm text-gray-600 mb-1 block">
@@ -503,12 +569,13 @@ const PartnerRatesPage = () => {
             </div>
           </div>
 
-          {/* ====================================================
-              SUBMIT
-          ==================================================== */}
+          {/* SUBMIT */}
 
           <div className="flex justify-end mt-5">
-            <Button onClick={handleAddRate} disabled={adding}>
+            <Button
+              onClick={handleAddRate}
+              disabled={adding || loadingLocations}
+            >
               {adding ? "Adding..." : "Add Rate"}
             </Button>
           </div>
@@ -516,7 +583,7 @@ const PartnerRatesPage = () => {
       )}
 
       {/* ======================================================
-          RATES LIST — staff ও employee দুজনেই দেখবে (GET only)
+          RATES LIST
       ====================================================== */}
 
       <div className="bg-white p-6 rounded-xl shadow">
@@ -524,7 +591,8 @@ const PartnerRatesPage = () => {
           <h3 className="text-lg font-semibold">Wholesale Rates</h3>
 
           <span className="text-sm text-gray-500">
-            {rates.length} rate{rates.length !== 1 ? "s" : ""}
+            {rates.length} rate
+            {rates.length !== 1 ? "s" : ""}
           </span>
         </div>
 
@@ -535,14 +603,10 @@ const PartnerRatesPage = () => {
             Loading rates...
           </div>
         ) : rates.length === 0 ? (
-          /* Empty */
-
           <div className="text-center py-10">
             <p className="text-sm text-gray-400">No rates set yet.</p>
           </div>
         ) : (
-          /* Table */
-
           <div className="overflow-x-auto">
             <table className="w-full border text-sm">
               <thead className="bg-secondary text-white">
@@ -564,60 +628,84 @@ const PartnerRatesPage = () => {
               </thead>
 
               <tbody>
-                {rates.map((rate) => (
-                  <tr
-                    key={rate.id}
-                    className="odd:bg-gray-50 hover:bg-gray-100"
-                  >
-                    {/* Mode */}
+                {rates.map((rate) => {
+                  const destination =
+                    rate.destinationLocation ||
+                    locations.find(
+                      (location) => location.id === rate.destinationId,
+                    );
 
-                    <td className="border p-3">
-                      <span className="font-medium">{rate.mode}</span>
-                    </td>
+                  return (
+                    <tr
+                      key={rate.id}
+                      className="odd:bg-gray-50 hover:bg-gray-100"
+                    >
+                      {/* Mode */}
 
-                    {/* Destination */}
+                      <td className="border p-3">
+                        <span className="font-medium">{rate.mode}</span>
+                      </td>
 
-                    <td className="border p-3">{rate.destination}</td>
+                      {/* Destination */}
 
-                    {/* Rate */}
+                      <td className="border p-3">
+                        {destination ? (
+                          <div>
+                            <p className="font-medium text-gray-800">
+                              {destination.name} ({destination.code})
+                            </p>
 
-                    <td className="border p-3 text-right font-medium">
-                      {rate.ratePerKg}
-                    </td>
+                            <p className="text-xs text-gray-400">
+                              {destination.country}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">
+                            Unknown Destination
+                          </span>
+                        )}
+                      </td>
 
-                    {/* Minimum Kg */}
+                      {/* Rate */}
 
-                    <td className="border p-3 text-right">
-                      {rate.minChargeableKg ?? "-"}
-                    </td>
+                      <td className="border p-3 text-right font-medium">
+                        {rate.ratePerKg}
+                      </td>
 
-                    {/* Effective From */}
+                      {/* Minimum Kg */}
 
-                    <td className="border p-3">
-                      {formatDate(rate.effectiveFrom)}
-                    </td>
+                      <td className="border p-3 text-right">
+                        {rate.minChargeableKg ?? "-"}
+                      </td>
 
-                    {/* Effective To */}
+                      {/* Effective From */}
 
-                    <td className="border p-3">
-                      {formatDate(rate.effectiveTo)}
-                    </td>
+                      <td className="border p-3">
+                        {formatDate(rate.effectiveFrom)}
+                      </td>
 
-                    {/* Status */}
+                      {/* Effective To */}
 
-                    <td className="border p-3 text-center">
-                      <span
-                        className={
-                          rate.isActive
-                            ? "inline-flex px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"
-                            : "inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500"
-                        }
-                      >
-                        {rate.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="border p-3">
+                        {formatDate(rate.effectiveTo)}
+                      </td>
+
+                      {/* Status */}
+
+                      <td className="border p-3 text-center">
+                        <span
+                          className={
+                            rate.isActive
+                              ? "inline-flex px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"
+                              : "inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500"
+                          }
+                        >
+                          {rate.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -21,20 +21,20 @@ export default function Footer() {
           <div>
             <Link href="/" className="flex items-center gap-3">
               <Image
-                src="/logo.png"
+                src="/logo.jpg"
                 alt="Gilbrice Logistics"
-                width={50}
-                height={50}
+                width={120}
+                height={80}
                 className="rounded-xl"
               />
-              <div>
+              {/* <div>
                 <h3 className="text-2xl font-bold text-white">
                   Gilbrice Logistics
                 </h3>
                 <p className="text-slate-400 text-sm">
                   Air • Sea • Ground Freight
                 </p>
-              </div>
+              </div> */}
             </Link>
             <p className="mt-6 text-slate-400 leading-relaxed">
               A multi-partner shipping network connecting independent freight

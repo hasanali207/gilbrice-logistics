@@ -23,5 +23,5 @@ export default function LogoutPage() {
     handleLogout();
   }, []);
 
-  return <div className="p-10 text-center text-lg">লগ আউট হচ্ছে...</div>;
+  return <div className="p-10 text-center text-lg">Logging out...</div>;
 }

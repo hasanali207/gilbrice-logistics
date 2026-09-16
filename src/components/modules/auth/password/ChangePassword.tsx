@@ -2,14 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAppSelector } from "@/Redux/hook";
+import api from "@/lib/axios";
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
 const ChangePassword = () => {
-  const token = useAppSelector((state) => state.auth.token);
-
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -39,25 +37,13 @@ const ChangePassword = () => {
     try {
       setLoading(true);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_API}/api/v1/auth/change-password`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `${token}`,
-          },
-          body: JSON.stringify({
-            oldPassword,
-            newPassword,
-          }),
-        },
-      );
+      const res = await api.patch(`/api/v1/auth/change-password`, {
+        currentPassword: oldPassword,
+        newPassword,
+      });
 
-      const result = await res.json();
-
-      if (!res.ok) {
-        throw new Error(result.message || "Password change failed");
+      if (!res.data.success) {
+        throw new Error(res.data.message || "Password change failed");
       }
 
       toast.success("Password changed successfully");
@@ -73,7 +59,7 @@ const ChangePassword = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow">
+    <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow mt-6">
       <h2 className="text-xl font-semibold mb-4">Change Password</h2>
 
       {/* Old Password */}

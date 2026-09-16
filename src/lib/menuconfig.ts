@@ -6,10 +6,13 @@ import {
   Home,
   KeySquareIcon,
   LogOut,
+  MapPin,
+  MoveLeftIcon,
   NotebookPen,
   Package,
   ScanLine,
   Settings,
+  ShoppingBag,
   Truck,
   UserPlus,
   UserRoundSearch,
@@ -61,7 +64,62 @@ export const getMenus = (
       icon: Home,
       href: basePath,
     },
-
+    /* ---------------- PARTNERS ---------------- */
+    {
+      name: "Partners",
+      icon: Users,
+      sub: [
+        {
+          name: "All Partners",
+          icon: UserRoundSearch,
+          href: `${basePath}/partners`,
+        },
+        {
+          name: "Add Partner",
+          icon: UserPlus,
+          href: `${basePath}/partners/create`,
+        },
+      ],
+    },
+    /* ---------------- CUSTOMERS ---------------- */
+    {
+      name: "Customers",
+      icon: Users,
+      sub: [
+        {
+          name: "All Customers",
+          icon: UserRoundSearch,
+          href: `${basePath}/customers/allcustomers`,
+        },
+        {
+          name: "Add Customer",
+          icon: UserPlus,
+          href: `${basePath}/customers/create`,
+        },
+      ],
+    },
+    {
+      name: "Locations",
+      icon: MapPin,
+      sub: [
+        {
+          name: "All Locations",
+          icon: BarChart3,
+          href: `${basePath}/locations`,
+        },
+      ],
+    },
+    {
+      name: "Carrier",
+      icon: ShoppingBag,
+      sub: [
+        {
+          name: "All Carrier",
+          icon: BarChart3,
+          href: `${basePath}/carrier`,
+        },
+      ],
+    },
     /* ---------------- SHIPMENTS ---------------- */
     {
       name: "Shipments",
@@ -80,23 +138,23 @@ export const getMenus = (
       ],
     },
 
-    /* ---------------- PACKAGES ---------------- */
-    {
-      name: "Packages",
-      icon: Package,
-      sub: [
-        {
-          name: "Package Scan",
-          icon: ScanLine,
-          href: `${basePath}/packages/scan`,
-        },
-        {
-          name: "Scan History",
-          icon: CalendarClock,
-          href: `${basePath}/packages/scan-history`,
-        },
-      ],
-    },
+    // /* ---------------- PACKAGES ---------------- */
+    // {
+    //   name: "Packages",
+    //   icon: Package,
+    //   sub: [
+    //     {
+    //       name: "Package Scan",
+    //       icon: ScanLine,
+    //       href: `${basePath}/packages/scan`,
+    //     },
+    //     {
+    //       name: "Scan History",
+    //       icon: CalendarClock,
+    //       href: `${basePath}/packages/history`,
+    //     },
+    //   ],
+    // },
 
     /* ---------------- MANIFESTS ---------------- */
     {
@@ -113,47 +171,6 @@ export const getMenus = (
           icon: UserPlus,
           href: `${basePath}/manifests/create`,
         },
-        {
-          name: "Manifest Packages",
-          icon: FileDown,
-          href: `${basePath}/manifests/packages`,
-        },
-      ],
-    },
-
-    /* ---------------- CUSTOMERS ---------------- */
-    {
-      name: "Customers",
-      icon: Users,
-      sub: [
-        {
-          name: "All Customers",
-          icon: UserRoundSearch,
-          href: `${basePath}/customers/allcustomers`,
-        },
-        {
-          name: "Add Customer",
-          icon: UserPlus,
-          href: `${basePath}/customers/create`,
-        },
-      ],
-    },
-
-    /* ---------------- PARTNERS ---------------- */
-    {
-      name: "Partners",
-      icon: Users,
-      sub: [
-        {
-          name: "All Partners",
-          icon: UserRoundSearch,
-          href: `${basePath}/partners`,
-        },
-        {
-          name: "Add Partner",
-          icon: UserPlus,
-          href: `${basePath}/partners/create`,
-        },
       ],
     },
 
@@ -166,6 +183,27 @@ export const getMenus = (
           name: "All Payments",
           icon: BarChart3,
           href: `${basePath}/payments`,
+        },
+      ],
+    },
+    {
+      name: "Reports",
+      icon: BarChart3,
+      sub: [
+        {
+          name: "Shipment Reports",
+          icon: FileDown,
+          href: `${basePath}/reports/shipments`,
+        },
+        {
+          name: "Payment Reports",
+          icon: FileDown,
+          href: `${basePath}/reports/payments`,
+        },
+        {
+          name: "Partner Ledger",
+          icon: FileDown,
+          href: `${basePath}/reports/parnter-ledger`,
         },
       ],
     },
@@ -189,27 +227,6 @@ export const getMenus = (
     },
 
     /* ---------------- REPORTS ---------------- */
-    {
-      name: "Reports",
-      icon: BarChart3,
-      sub: [
-        {
-          name: "Shipment Reports",
-          icon: FileDown,
-          href: `${basePath}/reports/shipments`,
-        },
-        {
-          name: "Payment Reports",
-          icon: FileDown,
-          href: `${basePath}/reports/payments`,
-        },
-        {
-          name: "Partner Ledger",
-          icon: FileDown,
-          href: `${basePath}/reports/parnter-ledger`,
-        },
-      ],
-    },
 
     /* ---------------- SETTINGS ---------------- */
     {
@@ -230,9 +247,14 @@ export const getMenus = (
     },
 
     {
+      name: "Exit Dashboard",
+      icon: MoveLeftIcon,
+      href: `/`,
+    },
+    {
       name: "Logout",
       icon: LogOut,
-      href: `${basePath}/logout`,
+      href: `/logout`,
     },
   ];
 
@@ -368,7 +390,7 @@ export const getMenus = (
         {
           name: "Scan History",
           icon: CalendarClock,
-          href: `${basePath}/package/scan-history`,
+          href: `${basePath}/package/history`,
         },
       ],
     },

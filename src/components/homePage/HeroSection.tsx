@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight, PackageSearch, Search, Ship } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -128,10 +129,13 @@ const HeroSection = () => {
           >
             <div className="rounded-3xl border border-border bg-card p-4 shadow-2xl">
               {/* dummy image - replace with real tracking dashboard screenshot */}
-              <img
-                src="https://placehold.co/600x400/e5e7eb/073520?text=Shipment+Tracking+Preview"
-                alt="Gilbrice Logistics tracking dashboard"
-                className="w-full rounded-xl"
+              <Image
+                src="/banner.jpg"
+                alt="Gilbrice Logistics"
+                width={1250}
+                height={150}
+                className="rounded-xl"
+                loading="eager"
               />
             </div>
 
@@ -139,7 +143,7 @@ const HeroSection = () => {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="absolute -bottom-8 -left-6 rounded-2xl bg-primary p-5 shadow-xl"
+              className="absolute -bottom-25 -left-6 rounded-2xl bg-primary p-5 shadow-xl"
             >
               <PackageSearch className="h-5 w-5 text-gray-500 mb-1" />
               <h4 className="text-lg font-bold text-primary-foreground">
@@ -152,7 +156,7 @@ const HeroSection = () => {
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
-              className="absolute -top-8 -right-6 rounded-2xl bg-card border border-border p-5 shadow-xl"
+              className="absolute -top-20 -right-6 rounded-2xl bg-card border border-border p-5 shadow-xl"
             >
               <h4 className="text-2xl font-bold text-foreground">24/7</h4>
               <p className="text-muted-foreground text-sm">Live Tracking</p>

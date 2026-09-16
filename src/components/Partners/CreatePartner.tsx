@@ -3,10 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/axios";
+import { getDashboardPath } from "@/lib/route";
+import { RootState } from "@/Redux/store";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { useSelector } from "react-redux";
 
 const emptyForm = {
   companyName: "",
@@ -25,6 +28,8 @@ const CreatePartner = () => {
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const user = useSelector((state: RootState) => state.auth.user);
+  const basePath = getDashboardPath(user?.role);
 
   const handleCreate = async () => {
     if (
@@ -38,6 +43,7 @@ const CreatePartner = () => {
 
     setCreating(true);
     setError(null);
+
     try {
       const payload = {
         companyName: form.companyName.trim(),
@@ -50,9 +56,13 @@ const CreatePartner = () => {
         creditLimit: form.creditLimit ? Number(form.creditLimit) : undefined,
         isActive: form.isActive,
       };
+
       await api.post("/api/v1/partner", payload);
+
+      // Reset form after successful submit
+      setForm(emptyForm);
+
       toast.success("Partner created successfully");
-      router.push("/partners");
     } catch (err: any) {
       const message = err?.response?.data?.message || "Create failed";
       setError(message);
@@ -65,7 +75,7 @@ const CreatePartner = () => {
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
       <button
-        onClick={() => router.push("/partners")}
+        onClick={() => router.push(`${basePath}/partners`)}
         className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-6 cursor-pointer"
       >
         <ArrowLeft size={16} /> Back to partners

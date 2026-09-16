@@ -3,7 +3,17 @@
 import api from "@/lib/axios";
 import { getDashboardPath } from "@/lib/route";
 import { RootState } from "@/Redux/store";
-import { Eye, Loader2, Plus, RefreshCw, Search, Truck } from "lucide-react";
+import { getPagination } from "@/utils/getPageNumber";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Truck,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -81,7 +91,11 @@ const ShipmentsPage = ({ partnerId }: Props) => {
   const user = useSelector((state: RootState) => state.auth.user);
 
   const basePath = getDashboardPath(user?.role);
-  const query = partnerId ? `?partnerId=${partnerId}` : "";
+
+  const [page, setPage] = useState(1);
+  const [limit] = useState(5);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   // ============================================================
   // STATE
@@ -103,25 +117,46 @@ const ShipmentsPage = ({ partnerId }: Props) => {
     try {
       setRefreshing(true);
 
-      const res = await api.get("/api/v1/shipment", {
-        params: partnerId
-          ? {
-              partnerId,
-            }
-          : undefined,
-      });
+      const params = new URLSearchParams();
 
-      console.log("SHIPMENTS API:", res.data);
+      // Pagination
+      params.set("page", String(page));
+      params.set("limit", String(limit));
 
-      const data = res.data?.data;
+      // Partner filter
+      if (partnerId) {
+        params.set("partnerId", partnerId);
+      }
+
+      // Search
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+
+      // Status filter
+      if (status.trim()) {
+        params.set("status", status);
+      }
+
+      const res = await api.get(`/api/v1/shipment?${params.toString()}`);
+
+      const { data, meta } = res.data;
 
       setShipments(Array.isArray(data) ? data : []);
+
+      setTotalCount(meta?.total ?? (Array.isArray(data) ? data.length : 0));
+
+      setTotalPages(
+        meta?.total ? Math.ceil(meta.total / (meta.limit || limit)) : 1,
+      );
     } catch (error: any) {
       console.error("Failed to load shipments:", error);
 
       toast.error(error?.response?.data?.message || "Failed to load shipments");
 
       setShipments([]);
+      setTotalPages(1);
+      setTotalCount(0);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -131,44 +166,10 @@ const ShipmentsPage = ({ partnerId }: Props) => {
   // ============================================================
   // INITIAL LOAD
   // ============================================================
-
   useEffect(() => {
     fetchShipments();
-  }, [partnerId]);
-
-  // ============================================================
-  // FILTER
-  // ============================================================
-
-  const filteredShipments = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return shipments.filter((shipment) => {
-      // --------------------------------------------------------
-      // Search
-      // --------------------------------------------------------
-
-      const customerName =
-        shipment.customer?.fullName || shipment.customer?.fullName || "";
-
-      const matchesSearch =
-        !keyword ||
-        shipment.trackingNumber?.toLowerCase().includes(keyword) ||
-        customerName.toLowerCase().includes(keyword) ||
-        shipment.customer?.phone?.toLowerCase().includes(keyword) ||
-        shipment.destination?.toLowerCase().includes(keyword) ||
-        shipment.origin?.toLowerCase().includes(keyword) ||
-        shipment.partner?.companyName?.toLowerCase().includes(keyword);
-
-      // --------------------------------------------------------
-      // Status
-      // --------------------------------------------------------
-
-      const matchesStatus = !status || shipment.status === status;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [shipments, search, status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search, status, partnerId]);
 
   // ============================================================
   // FORMAT AMOUNT
@@ -186,7 +187,7 @@ const ShipmentsPage = ({ partnerId }: Props) => {
   // ============================================================
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-BD", {
+    return new Date(date).toLocaleDateString("en-US", {
       dateStyle: "medium",
     });
   };
@@ -223,19 +224,25 @@ const ShipmentsPage = ({ partnerId }: Props) => {
   };
 
   // ============================================================
-  // SUMMARY
+  // SUMMARY (current page's data থেকে calculate করা হচ্ছে)
   // ============================================================
 
-  const totalShipments = filteredShipments.length;
+  const summary = useMemo(() => {
+    const deliveredCount = shipments.filter(
+      (s) => s.status === "DELIVERED",
+    ).length;
 
-  const deliveredShipments = filteredShipments.filter(
-    (item) => item.status === "DELIVERED",
-  ).length;
+    const outstanding = shipments.reduce(
+      (sum, s) => sum + Number(s.customerBalance || 0),
+      0,
+    );
 
-  const outstandingAmount = filteredShipments.reduce(
-    (sum, item) => sum + Number(item.customerBalance || 0),
-    0,
-  );
+    return {
+      total: totalCount || shipments.length,
+      delivered: deliveredCount,
+      outstanding,
+    };
+  }, [shipments, totalCount]);
 
   // ============================================================
   // LOADING
@@ -255,7 +262,7 @@ const ShipmentsPage = ({ partnerId }: Props) => {
   // ============================================================
   // UI
   // ============================================================
-
+  const pages = getPagination(page, totalPages);
   return (
     <div className="max-w-7xl mx-auto py-10 px-4">
       {/* ====================================================== */}
@@ -358,9 +365,12 @@ const ShipmentsPage = ({ partnerId }: Props) => {
 
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search tracking number, customer, phone, partner..."
-              className="w-full border rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30"
+              className="w-full border rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/40"
             />
           </div>
 
@@ -368,8 +378,11 @@ const ShipmentsPage = ({ partnerId }: Props) => {
 
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-secondary/30"
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-secondary/40"
           >
             <option value="">All Status</option>
 
@@ -392,7 +405,7 @@ const ShipmentsPage = ({ partnerId }: Props) => {
         <div className="bg-white border rounded-xl shadow-sm p-5">
           <p className="text-sm text-gray-500">Total Shipments</p>
 
-          <p className="text-2xl font-bold mt-1">{totalShipments}</p>
+          <p className="text-2xl font-bold mt-1">{summary.total}</p>
         </div>
 
         {/* DELIVERED */}
@@ -401,7 +414,7 @@ const ShipmentsPage = ({ partnerId }: Props) => {
           <p className="text-sm text-gray-500">Delivered</p>
 
           <p className="text-2xl font-bold text-green-600 mt-1">
-            {deliveredShipments}
+            {summary.delivered}
           </p>
         </div>
 
@@ -411,7 +424,7 @@ const ShipmentsPage = ({ partnerId }: Props) => {
           <p className="text-sm text-gray-500">Outstanding</p>
 
           <p className="text-2xl font-bold text-orange-600 mt-1">
-            $ {formatAmount(outstandingAmount)}
+            $ {formatAmount(summary.outstanding)}
           </p>
         </div>
       </div>
@@ -431,8 +444,8 @@ const ShipmentsPage = ({ partnerId }: Props) => {
           </div>
 
           <p className="text-sm text-gray-500 mt-1">
-            {filteredShipments.length} shipment
-            {filteredShipments.length !== 1 ? "s" : ""}
+            {shipments.length} shipment
+            {shipments.length !== 1 ? "s" : ""}
           </p>
         </div>
 
@@ -469,11 +482,8 @@ const ShipmentsPage = ({ partnerId }: Props) => {
             </thead>
 
             <tbody>
-              {filteredShipments.map((shipment) => {
-                const customerName =
-                  shipment.customer?.fullName ||
-                  shipment.customer?.fullName ||
-                  "—";
+              {shipments.map((shipment) => {
+                const customerName = shipment.customer?.fullName || "—";
 
                 return (
                   <tr key={shipment.id} className="border-b hover:bg-gray-50">
@@ -593,7 +603,7 @@ const ShipmentsPage = ({ partnerId }: Props) => {
 
               {/* EMPTY */}
 
-              {filteredShipments.length === 0 && (
+              {shipments.length === 0 && (
                 <tr>
                   <td
                     colSpan={partnerId ? 9 : 10}
@@ -623,6 +633,51 @@ const ShipmentsPage = ({ partnerId }: Props) => {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-10">
+          <button
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+            disabled={page === 1}
+            className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+          >
+            <ArrowLeft /> Prev
+          </button>
+
+          <div className="flex items-center gap-1">
+            {pages.map((item, index) =>
+              item === "..." ? (
+                <span
+                  key={`dots-${index}`}
+                  className="w-9 h-9 flex items-center justify-center text-gray-500"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setPage(item as number)}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                    page === item
+                      ? "bg-green-600 text-white shadow-sm"
+                      : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
+
+          <button
+            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+            disabled={page === totalPages}
+            className="flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+          >
+            Next <ArrowRight />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

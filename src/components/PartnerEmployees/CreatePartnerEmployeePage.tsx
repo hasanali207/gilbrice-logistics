@@ -23,7 +23,7 @@ const CreatePartnerEmployeePage = () => {
     email: "",
     phone: "",
     password: "",
-    role: "WAREHOUSE_EMPLOYEE" as PartnerRole,
+    role: "OWNER" as PartnerRole,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {

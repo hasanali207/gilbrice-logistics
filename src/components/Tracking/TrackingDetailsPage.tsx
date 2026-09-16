@@ -1,5 +1,6 @@
 "use client";
 
+import { getShipmentStatusLabel } from "@/constants/shipment-status";
 import api from "@/lib/axios";
 import {
   AlertCircle,
@@ -14,7 +15,6 @@ import {
   Plane,
   ShieldCheck,
   Truck,
-  Weight,
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -75,7 +75,10 @@ interface TrackingData {
 }
 
 /* ============================================================
-   STATUS STEPS
+   CUSTOMER-FACING STATUS STEPS
+
+   Backend has more detailed internal statuses.
+   Customer sees simplified shipment progress.
 ============================================================ */
 
 const STATUS_STEPS = [
@@ -90,18 +93,23 @@ const STATUS_STEPS = [
     icon: Box,
   },
   {
-    key: "MANIFESTED",
-    label: "Manifested",
+    key: "PROCESSING",
+    label: "Processing",
+    icon: Clock3,
+  },
+  {
+    key: "IN_TRANSIT",
+    label: "In Transit",
     icon: Plane,
   },
   {
-    key: "WEIGHED",
-    label: "Weighed",
-    icon: Weight,
+    key: "ARRIVED",
+    label: "Arrived",
+    icon: MapPin,
   },
   {
-    key: "READY_FOR_PICKUP",
-    label: "Ready",
+    key: "OUT_FOR_DELIVERY",
+    label: "Out for Delivery",
     icon: Truck,
   },
   {
@@ -121,47 +129,81 @@ const normalizeStatus = (status?: string) => {
   return status.toUpperCase().replace(/\s+/g, "_").replace(/-/g, "_");
 };
 
-const getStatusLabel = (status?: string) => {
+/* ============================================================
+   INTERNAL STATUS → CUSTOMER TRACKING STAGE
+
+   Backend:
+   PROCESSING
+   WEIGHED
+   MANIFESTED
+   LOADED
+        ↓
+   Customer:
+   PROCESSING
+
+   Backend:
+   DEPARTED
+        ↓
+   Customer:
+   IN_TRANSIT
+
+   Backend:
+   ARRIVED
+   LOCAL_DISTRIBUTION
+   READY_FOR_PICKUP
+        ↓
+   Customer:
+   ARRIVED
+============================================================ */
+
+const getTrackingStep = (status?: string) => {
   const normalized = normalizeStatus(status);
 
   switch (normalized) {
     case "BOOKED":
-      return "Shipment Booked";
+      return "BOOKED";
 
     case "RECEIVED":
-      return "Shipment Received";
+      return "RECEIVED";
 
-    case "MANIFESTED":
-      return "Manifested";
-
+    case "PROCESSING":
     case "WEIGHED":
-      return "Shipment Weighed";
+    case "MANIFESTED":
+    case "LOADED":
+      return "PROCESSING";
 
+    case "DEPARTED":
+      return "IN_TRANSIT";
+
+    case "ARRIVED":
+    case "LOCAL_DISTRIBUTION":
     case "READY_FOR_PICKUP":
-      return "Ready for Pickup";
-
-    case "PICKED_UP":
-      return "Picked Up";
-
-    case "IN_TRANSIT":
-      return "In Transit";
+      return "ARRIVED";
 
     case "OUT_FOR_DELIVERY":
-      return "Out for Delivery";
+      return "OUT_FOR_DELIVERY";
 
     case "DELIVERED":
-      return "Delivered";
-
-    case "CANCELLED":
-      return "Cancelled";
-
-    case "ON_HOLD":
-      return "On Hold";
+      return "DELIVERED";
 
     default:
-      return status || "Processing";
+      return "";
   }
 };
+
+/* ============================================================
+   STATUS INDEX
+============================================================ */
+
+const getStatusIndex = (status?: string) => {
+  const normalized = normalizeStatus(status);
+
+  return STATUS_STEPS.findIndex((step) => step.key === normalized);
+};
+
+/* ============================================================
+   DATE FORMAT
+============================================================ */
 
 const formatDate = (date?: string) => {
   if (!date) return "—";
@@ -176,14 +218,6 @@ const formatDate = (date?: string) => {
     dateStyle: "medium",
     timeStyle: "short",
   });
-};
-
-const getStatusIndex = (status?: string) => {
-  const normalized = normalizeStatus(status);
-
-  const index = STATUS_STEPS.findIndex((step) => step.key === normalized);
-
-  return index;
 };
 
 /* ============================================================
@@ -237,14 +271,18 @@ const TrackingPage = () => {
         setLoading(true);
         setError("");
 
+        const decodedTrackingNumber = decodeURIComponent(trackingNumber);
+
         const res = await api.get(
-          `/api/v1/tracking/${encodeURIComponent(trackingNumber)}`,
+          `/api/v1/tracking/${encodeURIComponent(decodedTrackingNumber)}`,
         );
 
         const data = res.data?.data ?? res.data;
 
         setTracking(data);
       } catch (err: any) {
+        console.error("Tracking error:", err);
+
         setError(
           err?.response?.data?.message || "Unable to find this shipment.",
         );
@@ -273,6 +311,7 @@ const TrackingPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="h-52 rounded-2xl bg-card border" />
+
               <div className="h-52 rounded-2xl bg-card border" />
             </div>
 
@@ -322,19 +361,13 @@ const TrackingPage = () => {
 
   const status = normalizeStatus(tracking.status);
 
-  const currentStep = getStatusIndex(status);
-
   /*
-   * API:
-   *
-   * route.origin
-   * route.destination
-   * route.mode
-   *
-   * customer.name
-   *
-   * timeline[]
+   * Convert backend internal status
+   * to simplified customer-facing status.
    */
+  const trackingStep = getTrackingStep(status);
+
+  const currentStep = getStatusIndex(trackingStep);
 
   const origin = tracking.route?.origin || tracking.origin || "—";
 
@@ -404,7 +437,7 @@ const TrackingPage = () => {
               <div className="inline-flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-accent text-accent-foreground text-sm font-semibold">
                 <CircleDot size={16} />
 
-                {getStatusLabel(tracking.status)}
+                {getShipmentStatusLabel(tracking.status)}
               </div>
             </div>
           </div>
@@ -487,23 +520,25 @@ const TrackingPage = () => {
             </div>
 
             <div className="relative overflow-x-auto pb-2">
-              {/* DESKTOP LINE */}
+              {/* DESKTOP BASE LINE */}
 
-              <div className="hidden md:block absolute top-6 left-[8%] right-[8%] h-1 bg-muted rounded-full" />
+              <div className="hidden md:block absolute top-6 left-[7%] right-[7%] h-1 bg-muted rounded-full" />
+
+              {/* DESKTOP PROGRESS LINE */}
 
               {currentStep >= 0 && (
                 <div
-                  className="hidden md:block absolute top-6 left-[8%] h-1 bg-secondary rounded-full transition-all duration-500"
+                  className="hidden md:block absolute top-6 left-[7%] h-1 bg-secondary rounded-full transition-all duration-500"
                   style={{
                     width: `${Math.min(
-                      (currentStep / (STATUS_STEPS.length - 1)) * 84,
-                      84,
+                      (currentStep / (STATUS_STEPS.length - 1)) * 86,
+                      86,
                     )}%`,
                   }}
                 />
               )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-5 md:gap-2 relative min-w-[600px] md:min-w-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-5 md:gap-2 relative min-w-[700px] md:min-w-0">
                 {STATUS_STEPS.map((step, index) => {
                   const Icon = step.icon;
 
@@ -551,6 +586,30 @@ const TrackingPage = () => {
         )}
 
         {/* ====================================================
+            CANCELLED STATUS
+        ==================================================== */}
+
+        {status === "CANCELLED" && (
+          <div className="bg-card border border-red-200 rounded-2xl shadow-sm p-6 md:p-8 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center">
+                <AlertCircle size={21} className="text-red-600" />
+              </div>
+
+              <div>
+                <h2 className="font-bold text-lg text-red-700">
+                  Shipment Cancelled
+                </h2>
+
+                <p className="text-sm text-muted-foreground mt-1">
+                  This shipment has been cancelled.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================
             TOP SUMMARY
         ==================================================== */}
 
@@ -564,7 +623,9 @@ const TrackingPage = () => {
 
             <p className="text-xs text-muted-foreground">Current Status</p>
 
-            <p className="font-bold text-sm mt-1">{getStatusLabel(status)}</p>
+            <p className="font-bold text-sm mt-1">
+              {getShipmentStatusLabel(status)}
+            </p>
           </div>
 
           {/* PACKAGES */}
@@ -665,7 +726,7 @@ const TrackingPage = () => {
             <div>
               <InfoRow
                 label="Current Status"
-                value={getStatusLabel(tracking.status)}
+                value={getShipmentStatusLabel(status)}
               />
 
               <InfoRow label="Origin" value={origin} />
@@ -794,16 +855,16 @@ const TrackingPage = () => {
 
                       <div
                         className={`
-                            absolute left-0 top-0
-                            w-8 h-8 rounded-full
-                            flex items-center justify-center
-                            ring-4 ring-card
-                            ${
-                              isLatest
-                                ? "bg-secondary text-white"
-                                : "bg-muted text-muted-foreground"
-                            }
-                          `}
+                          absolute left-0 top-0
+                          w-8 h-8 rounded-full
+                          flex items-center justify-center
+                          ring-4 ring-card
+                          ${
+                            isLatest
+                              ? "bg-secondary text-white"
+                              : "bg-muted text-muted-foreground"
+                          }
+                        `}
                       >
                         {isLatest ? (
                           <CheckCircle2 size={16} />
@@ -816,20 +877,20 @@ const TrackingPage = () => {
 
                       <div
                         className={`
-                            rounded-xl border p-4
-                            transition-all
-                            ${
-                              isLatest
-                                ? "border-secondary/30 bg-secondary/5"
-                                : "border-border bg-card"
-                            }
-                          `}
+                          rounded-xl border p-4
+                          transition-all
+                          ${
+                            isLatest
+                              ? "border-secondary/30 bg-secondary/5"
+                              : "border-border bg-card"
+                          }
+                        `}
                       >
                         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="font-semibold text-foreground">
-                                {getStatusLabel(eventStatus)}
+                                {getShipmentStatusLabel(eventStatus)}
                               </h3>
 
                               {isLatest && (

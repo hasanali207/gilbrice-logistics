@@ -1,6 +1,5 @@
 "use client";
 
-import axios from "axios";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -23,9 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const BASE_API =
-  process.env.NEXT_PUBLIC_BASE_API || "http://localhost:5000/api/v1";
+import api from "@/lib/axios";
 
 type CreateStaffModalProps = {
   open: boolean;
@@ -67,23 +64,13 @@ export default function CreateStaffModal({
     try {
       setSubmitting(true);
 
-      const token = localStorage.getItem("token");
-
-      await axios.post(
-        `${BASE_API}/staff`,
-        {
-          fullName: form.fullName,
-          email: form.email,
-          phone: form.phone || undefined,
-          password: form.password,
-          role: form.role,
-        },
-        {
-          headers: {
-            Authorization: token || "",
-          },
-        },
-      );
+      await api.post(`/api/v1/user/staff`, {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone || undefined,
+        password: form.password,
+        role: form.role,
+      });
 
       toast.success("Staff member added successfully");
       onSuccess();

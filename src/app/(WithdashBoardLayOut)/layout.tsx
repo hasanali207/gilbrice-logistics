@@ -39,30 +39,19 @@ export default function DashboardLayout({
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* =====================================================
-          DESKTOP SIDEBAR
-      ====================================================== */}
-
+    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+      {/* DESKTOP SIDEBAR */}
       <div className="hidden md:block shrink-0">
         {role && <Sidebar open={open} setOpen={setOpen} userRole={role} />}
       </div>
 
-      {/* =====================================================
-          MOBILE SIDEBAR
-      ====================================================== */}
-
+      {/* MOBILE SIDEBAR — unchanged */}
       {mobileOpen && (
         <>
-          {/* Overlay */}
-
           <div
             className="fixed inset-0 z-20 bg-black/40 md:hidden"
             onClick={() => setMobileOpen(false)}
           />
-
-          {/* Drawer */}
-
           <div className="fixed left-0 top-0 z-30 h-full md:hidden">
             {role && (
               <Sidebar
@@ -76,16 +65,9 @@ export default function DashboardLayout({
         </>
       )}
 
-      {/* =====================================================
-          RIGHT SIDE
-      ====================================================== */}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* ===================================================
-            HEADER
-        ==================================================== */}
-
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      {/* RIGHT SIDE */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="shrink-0 flex items-center gap-3 border-b bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           {/* Mobile Menu */}
 
           <button
@@ -133,10 +115,6 @@ export default function DashboardLayout({
             </button>
           </div>
         </header>
-
-        {/* ===================================================
-            MAIN CONTENT
-        ==================================================== */}
 
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
